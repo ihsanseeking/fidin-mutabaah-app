@@ -39,6 +39,9 @@
   .badge-pj{background:rgba(74,222,128,.15);color:var(--green);border:1px solid var(--green-dim);}
   .badge-pembina{background:rgba(96,165,250,.15);color:var(--blue);border:1px solid rgba(96,165,250,.3);}
   .logout-btn{background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:8px;padding:6px 14px;font-size:12px;font-family:var(--font-mono);cursor:pointer;}
+  .back-app-btn{background:transparent;border:1px solid var(--green-dim);color:var(--green);border-radius:8px;padding:6px 14px;font-size:12px;font-family:var(--font-mono);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:4px;}
+  .back-app-btn:hover{background:rgba(74,222,128,.08);}
+  .topbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
 
   /* TABS */
   .tab-bar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
@@ -115,6 +118,14 @@
   .save-btn{background:var(--green);color:#0b140b;border:none;border-radius:10px;padding:10px 24px;font-weight:700;font-size:14px;cursor:pointer;margin-top:16px;}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;}
 
+  /* SHOW ALL TOGGLE */
+  .show-all-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;}
+  .show-all-label{font-size:12px;font-family:var(--font-mono);color:var(--text-dim);flex:1;}
+  .toggle-sm{width:34px;height:18px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;position:relative;flex-shrink:0;transition:background .2s;}
+  .toggle-sm.on{background:var(--blue);border-color:var(--blue);}
+  .toggle-sm::after{content:'';position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;background:var(--text-muted);transition:transform .2s;}
+  .toggle-sm.on::after{transform:translateX(16px);background:#fff;}
+
   @media(max-width:600px){
     .stats-row{grid-template-columns:repeat(2,1fr);}
     .target-grid,.member-list{grid-template-columns:1fr;}
@@ -157,7 +168,10 @@
         </div>
         <p>Mutabaah Fidin Jenggot Merah</p>
       </div>
-      <button class="logout-btn" onclick="doLogout()">Keluar</button>
+      <div class="topbar-actions">
+        <a class="back-app-btn" href="/">&#8592; Ke App</a>
+        <button class="logout-btn" onclick="doLogout()">Ganti Role / Logout</button>
+      </div>
     </div>
     <div class="tab-bar" id="tabBar"></div>
 
@@ -166,6 +180,9 @@
       <div id="rangeBarProgres"></div>
       <div class="stats-row" id="statsProgres"></div>
       <div class="member-grid" id="memberGrid"></div>
+      <div style="margin-top:12px;text-align:right">
+        <button class="btn-dl" onclick="downloadIqobReport()">⬇ Laporan Iqob (TXT)</button>
+      </div>
     </div>
 
     <!-- PJ: TARGET -->
@@ -179,6 +196,10 @@
     <div id="panel-detail" class="hidden">
       <div id="rangeBarDetail"></div>
       <div class="stats-row" id="statsDetail"></div>
+      <div class="show-all-bar">
+        <span class="show-all-label">Tampilkan semua amalan pribadi (bukan target saja)</span>
+        <div class="toggle-sm" id="toggleShowAll" onclick="toggleShowAllAmalan()"></div>
+      </div>
       <div class="table-wrap">
         <table><thead id="detailHead"></thead><tbody id="detailBody"></tbody></table>
       </div>
@@ -189,6 +210,10 @@
 
     <!-- PEMBINA: GRAFIK RIWAYAT -->
     <div id="panel-grafik" class="hidden">
+      <div class="show-all-bar" style="margin-bottom:12px">
+        <span class="show-all-label">Tampilkan semua amalan pribadi (bukan target saja)</span>
+        <div class="toggle-sm" id="toggleShowAllGrafik" onclick="toggleShowAllGrafik()"></div>
+      </div>
       <div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:12px">Pilih anggota untuk lihat grafik riwayat:</div>
       <div class="member-list" id="memberPicker"></div>
       <div id="grafikContent"></div>
@@ -239,6 +264,10 @@ const DEF_TARGETS=new Set(['ql','dzikir_pagi','duha','dzikir_sore','kahfi','infa
 let targets=new Set(DEF_TARGETS);
 let role='pj';
 
+// Pembina: show all amalan toggle state
+let showAllAmalanDetail=false;
+let showAllAmalanGrafik=false;
+
 // Date utils
 function toStr(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function today(){return toStr(new Date());}
@@ -253,7 +282,6 @@ function getLabelRange(s,e){
   if(s===e)return new Date(s).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const ds=new Date(s),de=new Date(e);
   if(ds.getMonth()===de.getMonth()){
-    const sameMonth=ds.getMonth();const year=ds.getFullYear();
     const dayDiff=Math.round((de-ds)/86400000);
     if(dayDiff===6)return `Pekan ${getPekanOf(s)} · ${new Date(s).toLocaleDateString('id-ID',{month:'long',year:'numeric'})}`;
     if(ds.getDate()===1&&de.getDate()===new Date(de.getFullYear(),de.getMonth()+1,0).getDate())
@@ -290,7 +318,6 @@ function setRange(mode, containerId, loadFn) {
   if(mode==='harian'){rangeState={mode,start:t,end:t};}
   else if(mode==='pekanan'){
     const p=getPekanOf(t);const s=toStr(new Date(d.getFullYear(),d.getMonth(),(p-1)*7+1));
-    const eRaw=new Date(d.getFullYear(),d.getMonth(),p*7);
     const lastDay=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
     const e=toStr(new Date(d.getFullYear(),d.getMonth(),Math.min(p*7,lastDay)));
     rangeState={mode,start:s,end:e};
@@ -317,10 +344,22 @@ function updateRangeLabel(containerId){
   if(el) el.textContent=getLabelRange(rangeState.start,rangeState.end);
 }
 
-// ── LOGIN ──────────────────────────────────────
+// ── LOGIN / SESSION ────────────────────────────
+const LS_ROLE_KEY='mutabaah_admin_role';
+
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('pwInput').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-  selRole('pj');
+  // Check remembered role
+  const savedRole=localStorage.getItem(LS_ROLE_KEY);
+  if(savedRole&&(savedRole==='pj'||savedRole==='pembina')){
+    role=savedRole;
+    loadTargets();
+    document.getElementById('loginWrap').classList.add('hidden');
+    document.getElementById('mainWrap').classList.remove('hidden');
+    try{ initRole(); }catch(e){ console.error('initRole error:',e); }
+  } else {
+    selRole('pj');
+  }
 });
 
 function selRole(r){
@@ -340,6 +379,7 @@ function doLogin(){
   const err=document.getElementById('loginErr');
   if(val===PW[role]){
     err.classList.add('hidden');
+    localStorage.setItem(LS_ROLE_KEY,role);
     document.getElementById('loginWrap').classList.add('hidden');
     document.getElementById('mainWrap').classList.remove('hidden');
     loadTargets();
@@ -349,10 +389,13 @@ function doLogin(){
     err.classList.remove('hidden');
   }
 }
+
 function doLogout(){
+  localStorage.removeItem(LS_ROLE_KEY);
   document.getElementById('mainWrap').classList.add('hidden');
   document.getElementById('loginWrap').classList.remove('hidden');
   document.getElementById('pwInput').value='';
+  selRole('pj');
 }
 
 // ── INIT ROLE ──────────────────────────────────
@@ -394,7 +437,25 @@ function switchTab(t){
   if(t==='grafik') initGrafik();
 }
 
+// ── SHOW ALL AMALAN TOGGLES ────────────────────
+function toggleShowAllAmalan(){
+  showAllAmalanDetail=!showAllAmalanDetail;
+  const tog=document.getElementById('toggleShowAll');
+  if(tog) tog.classList.toggle('on', showAllAmalanDetail);
+  loadDetail();
+}
+
+function toggleShowAllGrafik(){
+  showAllAmalanGrafik=!showAllAmalanGrafik;
+  const tog=document.getElementById('toggleShowAllGrafik');
+  if(tog) tog.classList.toggle('on', showAllAmalanGrafik);
+  if(selectedMember) loadGrafikMember(selectedMember);
+}
+
 // ── PJ: PROGRES ANGGOTA ────────────────────────
+// Only counts target amalan (targets set)
+let _lastProgresData=null;
+
 async function loadProgres(){
   const {start,end}=rangeState;
   const dates=datesInRange(start,end);
@@ -417,19 +478,18 @@ async function loadProgres(){
     });
 
     const totalDays=dates.length;
-    let totalActive=0, totalChecks=(checkins||[]).length;
+    let totalChecks=(checkins||[]).length;
 
     const cards=MEMBERS.map(nama=>{
       const uid=(users||[]).find(u=>u.nama_lengkap===nama)?.id;
       const userData=uid?byUser[uid]||{}:{};
       const activeDays=Object.keys(userData).filter(d=>dates.includes(d)).length;
-      if(activeDays>0) totalActive++;
 
-      // Avg completion per active day (target amalan)
+      // Compute per-day target completion (only target amalan)
       let sumPct=0; let countDays=0;
+      let totalTargetOps=0; let totalTargetDone=0;
       dates.forEach(d=>{
         const dow=new Date(d).getDay();
-        const dayAmalan=targets;
         const done=userData[d]||new Set();
         const relevantTargets=[...targets].filter(id=>{
           if(id==='puasa_senin_kamis')return[1,4].includes(dow);
@@ -437,16 +497,47 @@ async function loadProgres(){
           return true;
         });
         if(relevantTargets.length>0){
-          sumPct+=relevantTargets.filter(id=>done.has(id)).length/relevantTargets.length*100;
+          const doneCnt=relevantTargets.filter(id=>done.has(id)).length;
+          sumPct+=doneCnt/relevantTargets.length*100;
           countDays++;
+          totalTargetOps+=relevantTargets.length;
+          totalTargetDone+=doneCnt;
         }
       });
       const avgPct=countDays>0?Math.round(sumPct/countDays):0;
       const pctColor=avgPct>=70?'var(--green)':avgPct>=40?'var(--amber)':'var(--red)';
-      const subLabel=totalDays===1
-        ?`${[...( (uid?byUser[uid]||{}:{})[dates[0]]||new Set())].length} amalan hari ini`
-        :`${activeDays}/${totalDays} hari aktif · rata-rata ${avgPct}% target`;
-      return {nama,uid,avgPct,activeDays,totalDays,subLabel,pctColor};
+
+      // For single day: show X/Y target selesai
+      let subLabel;
+      if(totalDays===1){
+        const dow=new Date(dates[0]).getDay();
+        const rel=[...targets].filter(id=>{
+          if(id==='puasa_senin_kamis')return[1,4].includes(dow);
+          if(id==='kahfi')return dow===5;
+          return true;
+        });
+        const done=userData[dates[0]]||new Set();
+        const doneCnt=rel.filter(id=>done.has(id)).length;
+        subLabel=`${doneCnt}/${rel.length} target selesai`;
+      } else {
+        subLabel=`${activeDays}/${totalDays} hari aktif · rata-rata ${avgPct}% target`;
+      }
+
+      // Iqob: for each day in range, count missed target amalan
+      // 1 missed target amalan = 1 pushup iqob point
+      let totalIqob=0;
+      dates.forEach(d=>{
+        const dow=new Date(d).getDay();
+        const done=userData[d]||new Set();
+        const rel=[...targets].filter(id=>{
+          if(id==='puasa_senin_kamis')return[1,4].includes(dow);
+          if(id==='kahfi')return dow===5;
+          return true;
+        });
+        totalIqob+=rel.filter(id=>!done.has(id)).length;
+      });
+
+      return {nama,uid,avgPct,activeDays,totalDays,subLabel,pctColor,totalIqob,totalTargetOps,totalTargetDone};
     });
 
     const activeCount=cards.filter(c=>c.activeDays>0).length;
@@ -472,16 +563,60 @@ async function loadProgres(){
         </div>
         <div class="pbar"><div class="pbar-fill" style="width:${c.avgPct}%;background:${c.pctColor}"></div></div>
         <div class="member-sub">${c.subLabel}</div>
+        <div style="font-size:10px;color:var(--red);font-family:var(--font-mono);margin-top:4px">Iqob: ${c.totalIqob} pushup (${c.totalIqob} target terlewat)</div>
       </div>`).join('');
+
+    _lastProgresData={users,checkins,cards,start,end};
   }catch(e){
     document.getElementById('memberGrid').innerHTML=`<div style="color:var(--red);font-family:var(--font-mono);font-size:13px">Error: ${e.message}</div>`;
   }
+}
+
+// ── PJ: IQOB REPORT (TXT) ─────────────────────
+function downloadIqobReport(){
+  if(!_lastProgresData){alert('Muat data dulu');return;}
+  const {cards,start,end}=_lastProgresData;
+  const rangeLabel=getLabelRange(start,end);
+  const now=new Date().toLocaleString('id-ID');
+  let txt=`LAPORAN IQOB MUTABAAH FIDIN JENGGOT MERAH\n`;
+  txt+=`Periode: ${rangeLabel}\n`;
+  txt+=`Digenerate: ${now}\n`;
+  txt+=`${'='.repeat(50)}\n\n`;
+  txt+=`TARGET GRUP AKTIF (${targets.size} amalan):\n`;
+  AMALAN.filter(a=>targets.has(a.id)).forEach(a=>{txt+=`  - ${a.name}\n`;});
+  txt+=`\n${'='.repeat(50)}\n`;
+  txt+=`REKAPITULASI IQOB PER ANGGOTA\n`;
+  txt+=`${'='.repeat(50)}\n\n`;
+
+  // Sort by iqob desc for report
+  const sorted=[...cards].sort((a,b)=>b.totalIqob-a.totalIqob);
+  sorted.forEach((c,i)=>{
+    txt+=`${i+1}. ${c.nama}\n`;
+    txt+=`   Progres Target : ${c.avgPct}%\n`;
+    txt+=`   Iqob           : ${c.totalIqob} pushup (${c.totalIqob} amalan target terlewat)\n`;
+    if(!c.uid) txt+=`   Status         : Belum registrasi di app\n`;
+    txt+=`\n`;
+  });
+
+  txt+=`${'='.repeat(50)}\n`;
+  txt+=`CATATAN:\n`;
+  txt+=`1 amalan target terlewat = 1 pushup iqob\n`;
+  txt+=`Iqob dihitung dari total amalan target yang tidak dicentang\ndalam periode yang dipilih.\n`;
+
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain;charset=utf-8'}));
+  a.download=`iqob-mutabaah-${start}${start!==end?'_sd_'+end:''}.txt`;
+  a.click();
 }
 
 // ── PEMBINA: DETAIL AMALAN ────────────────────
 async function loadDetail(){
   const {start,end}=rangeState;
   updateRangeLabel('rangeBarDetail');
+  // Sync toggle UI
+  const tog=document.getElementById('toggleShowAll');
+  if(tog) tog.classList.toggle('on', showAllAmalanDetail);
+
   document.getElementById('detailBody').innerHTML='<tr><td colspan="99" style="text-align:center;padding:20px;color:var(--text-muted);font-family:var(--font-mono)">Memuat...</td></tr>';
   document.getElementById('statsDetail').innerHTML='';
   if(!db){document.getElementById('detailBody').innerHTML='<tr><td colspan="99" style="color:var(--red);padding:20px;font-family:var(--font-mono)">⚠️ Koneksi database gagal.</td></tr>';return;}
@@ -490,19 +625,19 @@ async function loadDetail(){
     const {data:checkins}=await db.from('daily_checkin').select('user_id,tanggal,amalan_id')
       .gte('tanggal',start).lte('tanggal',end).eq('checked',true);
 
-    // Aggregate: per user → Set of amalan (OR across days: any day = counted)
     const checkinMap={};
-    const dates=datesInRange(start,end);
     (checkins||[]).forEach(c=>{
       if(!checkinMap[c.user_id]) checkinMap[c.user_id]=new Set();
       checkinMap[c.user_id].add(c.amalan_id);
     });
 
-    // Use first day's dow for column filtering (if single day)
     const isSingle=start===end;
     const dow=new Date(start).getDay();
-    const showAmalan=AMALAN.filter(a=>{
-      if(!isSingle) return true; // all amalan in range view
+
+    // Base filter: only target amalan unless showAllAmalanDetail
+    let showAmalan=AMALAN.filter(a=>{
+      if(!showAllAmalanDetail && !targets.has(a.id)) return false;
+      if(!isSingle) return true;
       if(a.id==='puasa_senin_kamis') return[1,4].includes(dow);
       if(a.id==='kahfi') return dow===5;
       return true;
@@ -513,7 +648,8 @@ async function loadDetail(){
     document.getElementById('statsDetail').innerHTML=`
       <div class="stat-card"><div class="stat-num" style="color:var(--green)">${activeUsers}/${MEMBERS.length}</div><div class="stat-label">Aktif</div></div>
       <div class="stat-card"><div class="stat-num">${totalChecks}</div><div class="stat-label">Total checkin</div></div>
-      <div class="stat-card"><div class="stat-num" style="font-size:14px;color:var(--blue);line-height:1.4">${getLabelRange(start,end)}</div><div class="stat-label">Rentang</div></div>`;
+      <div class="stat-card"><div class="stat-num" style="font-size:14px;color:var(--blue);line-height:1.4">${getLabelRange(start,end)}</div><div class="stat-label">Rentang</div></div>
+      <div class="stat-card"><div class="stat-num" style="font-size:14px;color:var(--amber);line-height:1.4">${showAmalan.length}</div><div class="stat-label">${showAllAmalanDetail?'Semua amalan':'Target amalan'}</div></div>`;
 
     let head='<tr><th>Nama</th><th>%</th>';
     showAmalan.forEach(a=>{const t=targets.has(a.id);head+=`<th style="${t?'color:var(--amber)':''}">${t?'★ ':''}${a.name}</th>`;});
@@ -525,7 +661,7 @@ async function loadDetail(){
       const uid=(users||[]).find(u=>u.nama_lengkap===nama)?.id;
       const done=uid?(checkinMap[uid]||new Set()):new Set();
       const cnt=showAmalan.filter(a=>done.has(a.id)).length;
-      const pct=Math.round(cnt/showAmalan.length*100);
+      const pct=showAmalan.length>0?Math.round(cnt/showAmalan.length*100):0;
       const pc=pct>=70?'var(--green)':pct>=40?'var(--amber)':'var(--red)';
       body+=`<tr><td style="font-weight:600">${nama}${!uid?'<span style="font-size:10px;color:var(--red)"> •</span>':''}</td>
         <td><div class="pbar" style="min-width:50px"><div class="pbar-fill" style="width:${pct}%;background:${pc}"></div></div>
@@ -554,7 +690,7 @@ function downloadCSV(){
     const uid=(users||[]).find(u=>u.nama_lengkap===nama)?.id;
     const done=uid?(checkinMap[uid]||new Set()):new Set();
     const cnt=showAmalan.filter(a=>done.has(a.id)).length;
-    csv+=`"${nama}",${showAmalan.map(a=>done.has(a.id)?'1':'0').join(',')},${cnt},${Math.round(cnt/showAmalan.length*100)}%\n`;
+    csv+=`"${nama}",${showAmalan.map(a=>done.has(a.id)?'1':'0').join(',')},${cnt},${showAmalan.length>0?Math.round(cnt/showAmalan.length*100):0}%\n`;
   });
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`detail-mutabaah-${start}${start!==end?'_sd_'+end:''}.csv`;a.click();
@@ -564,6 +700,10 @@ function downloadCSV(){
 let selectedMember=null;
 
 function initGrafik(){
+  // Sync toggle UI
+  const tog=document.getElementById('toggleShowAllGrafik');
+  if(tog) tog.classList.toggle('on', showAllAmalanGrafik);
+
   document.getElementById('memberPicker').innerHTML=MEMBERS.map(nama=>`
     <div class="member-pick ${selectedMember===nama?'active':''}" onclick="selectMember('${nama}')">
       <span class="mini-init">${nama[0]}</span>${nama}
@@ -599,6 +739,7 @@ async function loadGrafikMember(nama){
     (checkins||[]).forEach(c=>{if(byDay[c.tanggal])byDay[c.tanggal].add(c.amalan_id);});
 
     const dayNames=['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+    // Daily data uses only target amalan for bar chart %
     const dailyData=dates.map(d=>{
       const dow=new Date(d).getDay();
       const rel=[...targets].filter(id=>{
@@ -611,9 +752,7 @@ async function loadGrafikMember(nama){
       return{d,dow,done,total:rel.length,pct};
     });
 
-    const maxPct=Math.max(...dailyData.map(x=>x.pct),1);
-
-    // Bar chart (last 30 days, show every other label on mobile)
+    // Bar chart (last 30 days)
     const barHtml=dailyData.map(x=>{
       const h=Math.round(x.pct/100*60);
       const col=x.pct>=70?'var(--green)':x.pct>=40?'var(--amber)':'var(--green-dim)';
@@ -626,11 +765,13 @@ async function loadGrafikMember(nama){
       </div>`;
     }).join('');
 
+    // Amalan list: filter by showAllAmalanGrafik
+    const amalanToShow=showAllAmalanGrafik ? AMALAN : AMALAN.filter(a=>targets.has(a.id));
+
     // Amalan detail history table
-    const amalanRows=AMALAN.map(a=>{
+    const amalanRows=amalanToShow.map(a=>{
       const t2=targets.has(a.id);
-      const activeDays=dailyData.filter(x=>byDay[x.d].has(a.id));
-      const cnt=activeDays.length;
+      const cnt=dailyData.filter(x=>byDay[x.d].has(a.id)).length;
       const pct30=Math.round(cnt/30*100);
       const col2=pct30>=70?'var(--green)':pct30>=40?'var(--amber)':'var(--green-dim)';
       // mini bars per day (last 14 days)
@@ -650,6 +791,7 @@ async function loadGrafikMember(nama){
 
     const avgPct=Math.round(dailyData.filter(x=>x.pct>0).reduce((s,x)=>s+x.pct,0)/Math.max(dailyData.filter(x=>x.pct>0).length,1));
     const activeDays=dailyData.filter(x=>x.done>0).length;
+    const amalanLabel=showAllAmalanGrafik?`Semua amalan (${amalanToShow.length})`:`Target grup (${amalanToShow.length})`;
 
     gc.innerHTML=`
       <div class="card" style="margin-bottom:16px">
@@ -660,7 +802,7 @@ async function loadGrafikMember(nama){
         <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:8px">Completion target harian · 30 hari terakhir</div>
         <div class="mini-chart" style="height:100px">${barHtml}</div>
       </div>
-      <div style="font-size:12px;font-family:var(--font-mono);color:var(--text-muted);margin-bottom:10px">RIWAYAT PER AMALAN · 30 HARI TERAKHIR</div>
+      <div style="font-size:12px;font-family:var(--font-mono);color:var(--text-muted);margin-bottom:10px">RIWAYAT PER AMALAN · 30 HARI TERAKHIR · ${amalanLabel.toUpperCase()}</div>
       ${amalanRows}`;
   }catch(e){gc.innerHTML=`<div style="color:var(--red);font-family:var(--font-mono);font-size:13px">Error: ${e.message}</div>`;}
 }

@@ -1,6 +1,6 @@
 # ERD — Mutabaah Fidin Jenggot Merah
 **Entity Relationship Diagram & Database Schema**  
-Versi: 1.0 | Terakhir diperbarui: 2026-06-07
+Versi: 1.1 | Terakhir diperbarui: 2026-06-07
 
 ---
 
@@ -147,14 +147,34 @@ CREATE POLICY "anon_update_tilawah" ON tilawah_progress FOR UPDATE USING (true);
 | `kahfi` | Baca Al-Kahfi | Jumat |
 | `earlybird_maghrib` | Early Bird Maghrib | Maghrib |
 | `maghrib` | Sholat Maghrib | Maghrib |
+| `qobliyah_maghrib` | Sunnah Qobliyah Maghrib | Maghrib |
 | `badiyah_maghrib` | Ba'diyah Maghrib | Maghrib |
 | `earlybird_isya` | Early Bird Isya | Isya |
 | `isya` | Sholat Isya | Isya |
 | `badiyah_isya` | Ba'diyah Isya | Isya |
+| `sholat_jumat` | Sholat Jumat (Jumat only) | Jumat |
 | `infaq` | Infaq | Amal |
 | `1juz` | Tilawah 1 Juz | Tilawah |
 | `puasa_senin_kamis` | Puasa Senin-Kamis | Puasa |
 | `olahraga` | Olahraga 30 mnt | Sehat |
+| `istighfar` | Istighfar | Dzikir |
+| `sholawat` | Sholawat | Dzikir |
+| `tasbih` | Tasbih/Dzikir | Dzikir |
+
+---
+
+## State Storage (localStorage)
+
+State yang disimpan di localStorage pada sisi client:
+
+| Key | Format | Keterangan |
+|-----|--------|------------|
+| `mutabaah_user_id` | UUID string | ID user aktif — digunakan untuk multi-device sync |
+| `state.olahraga[tanggal]` | `int` (menit) | Durasi olahraga harian (progressive, bukan boolean) |
+| `state.dzikir[tanggal][id]` | `int` (count) | Counter per jenis dzikir per hari |
+| `state.iqob` | `{ hutang: int, lastCalc: date }` | Akumulasi hutang iqob dan tanggal kalkulasi terakhir |
+
+> **Catatan**: `mutabaah_user_id` menggantikan peran `device_id` untuk identifikasi user lintas device. `state.olahraga` menyimpan menit (integer) bukan boolean karena target olahraga bersifat progressive. `state.dzikir` menggunakan nested object `[tanggal][id]` agar bisa menyimpan banyak jenis dzikir sekaligus.
 
 ---
 
