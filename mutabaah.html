@@ -1292,13 +1292,13 @@ async function getOrCreateSupabaseUser(namaLengkap) {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       // Verifikasi masih valid di Supabase
-      const { data: verify } = await db.from('users').select('id').eq('id', cached).single();
+      const { data: verify } = await db.from('mtb_users').select('id').eq('id', cached).single();
       if (verify) { currentUserId = cached; return cached; }
       localStorage.removeItem(cacheKey); // cache basi, hapus
     }
 
     // 2. Cek berdasarkan nama di Supabase
-    const { data: byName } = await db.from('users').select('id').eq('nama_lengkap', namaLengkap).single();
+    const { data: byName } = await db.from('mtb_users').select('id').eq('nama_lengkap', namaLengkap).single();
     if (byName) {
       localStorage.setItem(cacheKey, byName.id);
       currentUserId = byName.id;
@@ -1306,7 +1306,7 @@ async function getOrCreateSupabaseUser(namaLengkap) {
     }
 
     // 3. Buat user baru
-    const { data: created, error } = await db.from('users')
+    const { data: created, error } = await db.from('mtb_users')
       .insert({ nama_lengkap: namaLengkap, device_id: getDeviceId() })
       .select('id').single();
     if (error) throw error;
@@ -1327,12 +1327,12 @@ async function syncCheckinToSupabase(amalanId, isChecked, checkedAt) {
   const today = getToday();
   try {
     if (isChecked) {
-      await db.from('daily_checkin').upsert({
+      await db.from('mtb_daily_checkin').upsert({
         user_id: currentUserId, tanggal: today, amalan_id: amalanId,
         checked: true, checked_at: new Date(checkedAt).toISOString()
       }, { onConflict: 'user_id,tanggal,amalan_id' });
     } else {
-      await db.from('daily_checkin')
+      await db.from('mtb_daily_checkin')
         .update({ checked: false, checked_at: null })
         .eq('user_id', currentUserId).eq('tanggal', today).eq('amalan_id', amalanId);
     }
@@ -1342,7 +1342,7 @@ async function syncCheckinToSupabase(amalanId, isChecked, checkedAt) {
 async function syncTilawahToSupabase(halaman) {
   if (!currentUserId) return;
   try {
-    await db.from('tilawah_progress').upsert({
+    await db.from('mtb_tilawah').upsert({
       user_id: currentUserId, tanggal: getToday(), halaman
     }, { onConflict: 'user_id,tanggal' });
   } catch(e) { console.warn('Sync tilawah failed:', e.message); }
@@ -1358,13 +1358,71 @@ async function syncTodayToSupabase() {
     checked_at: todayChecked[a.id] ? new Date(todayChecked[a.id]).toISOString() : null
   }));
   try {
-    await db.from('daily_checkin').upsert(ops, { onConflict: 'user_id,tanggal,amalan_id' });
+    await db.from('mtb_daily_checkin').upsert(ops, { onConflict: 'user_id,tanggal,amalan_id' });
     const hal = state.tilawah?.[today] || 0;
     if (hal > 0) await syncTilawahToSupabase(hal);
   } catch(e) { console.warn('Bulk sync failed:', e.message); }
 }
 
-window.addEventListener('online', () => { if (currentUserId) syncTodayToSupabase(); });
+window.addEventListener('online', () => { if (currentUserId) { syncTodayToSupabase(); syncCountersToSupabase(); syncIqobToSupabase(); } });
+
+// Sync counter progressive (olahraga, dzikir, QL sub) ke mtb_counters
+async function syncCountersToSupabase(targetDate) {
+  if (!currentUserId) return;
+  const today = targetDate || getToday();
+  try {
+    const counters = {
+      user_id: currentUserId,
+      tanggal: today,
+      olahraga_menit:  state.olahraga?.[today] || 0,
+      istighfar:       state.dzikir?.[today]?.istighfar || 0,
+      sholawat:        state.dzikir?.[today]?.sholawat  || 0,
+      tasbih:          state.dzikir?.[today]?.tasbih    || 0,
+      tahajud_rokaat:  state.ql_sub?.[today]?.tahajud   || 0,
+      witir_rokaat:    state.ql_sub?.[today]?.witir     || 0,
+      updated_at:      new Date().toISOString()
+    };
+    await db.from('mtb_counters').upsert(counters, { onConflict: 'user_id,tanggal' });
+  } catch(e) { console.warn('Sync counters failed:', e.message); }
+}
+
+// Sync iqob ke mtb_iqob
+async function syncIqobToSupabase() {
+  if (!currentUserId) return;
+  const today = getToday();
+  try {
+    const hutang = state.iqob?.hutang || 0;
+    await db.from('mtb_iqob').upsert({
+      user_id: currentUserId,
+      tanggal: today,
+      kumulatif: hutang,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,tanggal' });
+  } catch(e) { console.warn('Sync iqob failed:', e.message); }
+}
+
+// Load group config dari Supabase (PJ bisa ubah target dari admin)
+async function loadGroupConfigFromSupabase() {
+  if (!db) return;
+  try {
+    const { data, error } = await db.from('mtb_group_config')
+      .select('*').eq('grup', 'Jenggot Merah').single();
+    if (error || !data) return;
+    // Update groupTargets dari DB
+    if (data.target_amalan?.length) {
+      groupTargets = new Set(data.target_amalan);
+    }
+    // Update dzikir targets dari DB
+    if (data.dzikir_targets) {
+      Object.assign(DZIKIR_TARGETS, data.dzikir_targets);
+    }
+    // Update olahraga target
+    if (data.olahraga_target) {
+      window.OLAHRAGA_TARGET_MENIT = data.olahraga_target;
+    }
+    console.log('Group config loaded from DB');
+  } catch(e) { console.warn('Load group config failed:', e.message); }
+}
 
 // =====================
 // KOMUNITAS
@@ -1376,7 +1434,7 @@ async function loadKomunitas() {
   container.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted);font-size:13px;font-family:var(--font-mono)">Memuat data komunitas...</div>';
   const today = getToday();
   try {
-    const { data, error } = await db.from('daily_checkin')
+    const { data, error } = await db.from('mtb_daily_checkin')
       .select('amalan_id').eq('tanggal', today).eq('checked', true);
     if (error) throw error;
     const counts = {};
@@ -1513,7 +1571,12 @@ function selectUser(username) {
   loadState();
 
   // Register & sync ke Supabase (background, tidak block UI)
-  getOrCreateSupabaseUser(username).then(() => syncTodayToSupabase());
+  getOrCreateSupabaseUser(username).then(() => {
+    syncTodayToSupabase();
+    syncCountersToSupabase();
+    syncIqobToSupabase();
+    loadGroupConfigFromSupabase();
+  });
 
   // Update UI
   document.getElementById('userModal').classList.add('hidden');
@@ -1583,7 +1646,12 @@ function initUserSystem() {
     updateDate();
     checkNotifPermission();
     // Reconnect Supabase user (background, skip kalau guest)
-    if (!isGuest) getOrCreateSupabaseUser(saved).then(() => syncTodayToSupabase());
+    if (!isGuest) getOrCreateSupabaseUser(saved).then(() => {
+      syncTodayToSupabase();
+      syncCountersToSupabase();
+      syncIqobToSupabase();
+      loadGroupConfigFromSupabase();
+    });
   } else {
     renderUserList();
     document.getElementById('userModal').classList.remove('hidden');
@@ -1742,6 +1810,7 @@ function settleIqob(amount) {
   saveState();
   renderChecklist();
   showToast(`💪 ${amount} pushup selesai!`);
+  if (!isGuest && currentUserId) syncIqobToSupabase();
 }
 
 function saveState() {
@@ -2279,6 +2348,7 @@ function updateQLSub(type, delta) {
   saveState();
   renderChecklist();
   syncCheckinToSupabase('ql', done, state.checked[today]?.ql);
+  if (!isGuest && currentUserId) syncCountersToSupabase();
 }
 
 function updateRokaat(id, delta) {
@@ -2321,7 +2391,10 @@ function updateOlahraga(delta) {
   }
   saveState();
   renderChecklist();
-  if (!isGuest && currentUserId) syncCheckinToSupabase('olahraga', state.olahraga[today] >= target, state.checked[today]?.['olahraga'] || Date.now());
+  if (!isGuest && currentUserId) {
+    syncCheckinToSupabase('olahraga', state.olahraga[today] >= target, state.checked[today]?.['olahraga'] || Date.now());
+    syncCountersToSupabase();
+  }
 }
 
 function updateDzikir(id, delta) {
@@ -2342,7 +2415,10 @@ function updateDzikir(id, delta) {
   }
   saveState();
   renderChecklist();
-  if (!isGuest && currentUserId) syncCheckinToSupabase(id, state.dzikir[today][id] >= target, state.checked[today]?.[id] || Date.now());
+  if (!isGuest && currentUserId) {
+    syncCheckinToSupabase(id, state.dzikir[today][id] >= target, state.checked[today]?.[id] || Date.now());
+    syncCountersToSupabase();
+  }
 }
 
 function updateTilawah(delta) {

@@ -464,8 +464,8 @@ async function loadProgres(){
   document.getElementById('statsProgres').innerHTML='';
   if(!db){document.getElementById('memberGrid').innerHTML='<div style="color:var(--red);font-family:var(--font-mono);font-size:13px;padding:20px">⚠️ Koneksi database gagal. Cek internet.</div>';return;}
   try{
-    const {data:users}=await db.from('users').select('id,nama_lengkap');
-    const {data:checkins}=await db.from('daily_checkin').select('user_id,tanggal,amalan_id')
+    const {data:users}=await db.from('mtb_users').select('id,nama_lengkap');
+    const {data:checkins}=await db.from('mtb_daily_checkin').select('user_id,tanggal,amalan_id')
       .gte('tanggal',start).lte('tanggal',end).eq('checked',true);
 
     const userMap={}; (users||[]).forEach(u=>{userMap[u.id]=u.nama_lengkap;});
@@ -621,8 +621,8 @@ async function loadDetail(){
   document.getElementById('statsDetail').innerHTML='';
   if(!db){document.getElementById('detailBody').innerHTML='<tr><td colspan="99" style="color:var(--red);padding:20px;font-family:var(--font-mono)">⚠️ Koneksi database gagal.</td></tr>';return;}
   try{
-    const {data:users}=await db.from('users').select('id,nama_lengkap');
-    const {data:checkins}=await db.from('daily_checkin').select('user_id,tanggal,amalan_id')
+    const {data:users}=await db.from('mtb_users').select('id,nama_lengkap');
+    const {data:checkins}=await db.from('mtb_daily_checkin').select('user_id,tanggal,amalan_id')
       .gte('tanggal',start).lte('tanggal',end).eq('checked',true);
 
     const checkinMap={};
@@ -725,13 +725,13 @@ async function loadGrafikMember(nama){
   gc.innerHTML='<div style="color:var(--text-muted);font-family:var(--font-mono);font-size:13px;padding:16px 0">Memuat grafik...</div>';
   if(!db){gc.innerHTML='<div style="color:var(--red);font-family:var(--font-mono);font-size:13px;padding:16px 0">⚠️ Koneksi database gagal.</div>';return;}
   try{
-    const {data:users}=await db.from('users').select('id').eq('nama_lengkap',nama);
+    const {data:users}=await db.from('mtb_users').select('id').eq('nama_lengkap',nama);
     const uid=users?.[0]?.id;
     if(!uid){gc.innerHTML='<div style="color:var(--amber);font-family:var(--font-mono);font-size:13px;padding:16px 0">⚠ Anggota belum registrasi di app</div>';return;}
 
     const t=new Date(); const dates=[];
     for(let i=29;i>=0;i--){const d=new Date(t);d.setDate(d.getDate()-i);dates.push(toStr(d));}
-    const {data:checkins}=await db.from('daily_checkin').select('tanggal,amalan_id')
+    const {data:checkins}=await db.from('mtb_daily_checkin').select('tanggal,amalan_id')
       .eq('user_id',uid).gte('tanggal',dates[0]).eq('checked',true);
 
     // Per day completion

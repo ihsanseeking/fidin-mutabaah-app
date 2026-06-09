@@ -1,6 +1,6 @@
 # PRD — Mutabaah Fidin Jenggot Merah
 **Product Requirements Document**  
-Versi: 1.1 | Terakhir diperbarui: 2026-06-07  
+Versi: 1.2 | Terakhir diperbarui: 2026-06-09  
 Dibuat oleh: Ihsan Faturohman (PJ Mutabaah)
 
 ---
@@ -11,6 +11,7 @@ Dibuat oleh: Ihsan Faturohman (PJ Mutabaah)
 |-------|---------|-----------|
 | 1.0 | 2026-06-07 | Rilis awal |
 | 1.1 | 2026-06-07 | Tambah olahraga progressive, dzikir customizable, sistem iqob, social motivation inline, QL sub-split, qobliyah maghrib, Sholat Jumat, multi-device sync by name, admin remember role, perbaikan tampilan PJ/Pembina/Settings/Laporan |
+| 1.2 | 2026-06-09 | Arsitektur modul: prefix `mtb_` pada semua tabel, tambah mtb_counters + mtb_iqob + mtb_group_config, full sync counter progressive ke Supabase, group config dari DB (PJ-configurable), siap integrasi web app utama via external_user_id, roadmap Google Sheets |
 
 ---
 
@@ -216,21 +217,31 @@ Kelompok kajian **FIDIN Jenggot Merah** di Sukabumi terdiri dari 11 anggota yang
 |-------|-----------|
 | Frontend | HTML5 + CSS3 + Vanilla JS (single file PWA) |
 | Hosting | Netlify (static) |
-| Database | Supabase (PostgreSQL) |
+| Database | Supabase (PostgreSQL) — shared project dengan prefix `mtb_` |
 | Auth | Tidak ada akun — identitas by nama anggota (user_id linked to nama) |
 | Offline | localStorage sebagai primary store + fallback |
 | Sync | Supabase JS SDK v2 (CDN) |
+| Laporan Otomatis | Google Sheets via Apps Script (rencana v1.3) |
 
 ### 5.2 Prinsip Desain
-- **Offline-first**: localStorage selalu diperbarui duluan, Supabase sync async
+- **Offline-first**: localStorage selalu diperbarui duluan, Supabase sync async di background
 - **Single-file**: semua CSS dan JS inline di `mutabaah.html`
-- **Name-based identity**: `user_id` dikaitkan ke nama anggota, bukan device — memungkinkan multi-device sync per orang
-- **No duplicate user**: saat login, cek by nama → gunakan `user_id` yang ada → tidak buat baru jika nama sudah terdaftar
+- **Name-based identity**: `user_id` dikaitkan ke nama anggota, bukan device — multi-device sync per orang
+- **No duplicate user**: saat login, cek by nama → gunakan `user_id` yang ada
+- **Arsitektur modul**: semua tabel menggunakan prefix `mtb_` — siap dimasukkan ke dalam database web app utama tanpa konflik
+- **Integration-ready**: kolom `external_user_id` di `mtb_users` disiapkan untuk link ke sistem auth utama
+- **Config dari DB**: target grup dan target dzikir tersimpan di `mtb_group_config` — PJ ubah dari admin.html → langsung sync ke semua device anggota
 
 ### 5.3 Deployment
 - `mutabaah.html` → deploy sebagai `/index.html` di Netlify
 - `admin.html` → deploy sebagai `/admin.html`
 - Deploy via Netlify Files API (PowerShell script, SHA1-based)
+
+### 5.4 Rencana Integrasi Web App Utama
+1. Tambahkan kolom `mutabaah_user_id` di tabel users utama
+2. Isi `mtb_users.external_user_id` dengan UUID dari sistem auth utama
+3. Update RLS Supabase: `USING (auth.uid() = external_user_id)`
+4. Single sign-on via JWT — pengguna login sekali di app utama, otomatis terautentikasi di Mutabaah
 
 ---
 
@@ -263,6 +274,7 @@ Kelompok kajian **FIDIN Jenggot Merah** di Sukabumi terdiri dari 11 anggota yang
 | Versi | Fitur |
 |-------|-------|
 | v1.0 | Checkin, sync cloud, admin PJ+Pembina, grafik |
-| v1.1 (sekarang) | Olahraga progressive, dzikir customizable, sistem iqob, social motivation inline, QL sub-split, qobliyah maghrib, Sholat Jumat, multi-device sync by name, admin remember role, filter target grup per role, settings locked target, laporan target grup |
-| v1.2 | Notifikasi/reminder harian via browser |
-| v2.0 | Multi-grup, admin manajemen anggota |
+| v1.1 | Olahraga progressive, dzikir customizable, sistem iqob, social motivation inline, QL sub-split, qobliyah maghrib, Sholat Jumat, multi-device sync by name, admin remember role |
+| v1.2 (sekarang) | Arsitektur modul (prefix mtb_), full sync counter ke Supabase, mtb_group_config (PJ-configurable dari DB), kolom external_user_id untuk integrasi |
+| v1.3 | Google Sheets integration (Apps Script), notifikasi/reminder harian via browser |
+| v2.0 | Integrasi web app utama (single sign-on, shared DB), multi-grup, manajemen anggota |
