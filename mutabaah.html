@@ -1477,7 +1477,7 @@ async function loadGroupConfigFromSupabase() {
   if (!db) return;
   try {
     const { data, error } = await db.from('mtb_group_config')
-      .select('*').eq('grup', 'Jenggot Merah').single();
+      .select('target_amalan,dzikir_targets,olahraga_target,sholat_cumul_targets').eq('grup', 'Jenggot Merah').single();
     if (error || !data) return;
     // Update groupTargets dari DB
     if (data.target_amalan?.length) {
@@ -1490,6 +1490,10 @@ async function loadGroupConfigFromSupabase() {
     // Update olahraga target
     if (data.olahraga_target) {
       window.OLAHRAGA_TARGET_MENIT = data.olahraga_target;
+    }
+    // Update sholat cumul targets
+    if (data.sholat_cumul_targets) {
+      Object.assign(SHOLAT_CUMUL_TARGETS, data.sholat_cumul_targets);
     }
     console.log('Group config loaded from DB');
   } catch(e) { console.warn('Load group config failed:', e.message); }
