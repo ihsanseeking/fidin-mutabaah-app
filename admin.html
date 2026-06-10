@@ -579,35 +579,65 @@ async function loadProgres(){
 }
 
 // ── PJ: IQOB REPORT (TXT) ─────────────────────
+function getMotivIqob(iqob, nama) {
+  const n = nama.split(' ')[0];
+  if (iqob === 0)   return `🌟 Perfect! Tidak ada iqob — Istiqomah terus, ${n}!`;
+  if (iqob <= 10)   return `🌟 Sedikit bolong, pekan depan perfect!`;
+  if (iqob <= 20)   return `🔥 Hampir sempurna, semangat ikhwah!`;
+  if (iqob <= 30)   return `⚡ Tubuh kuat, iman makin kuat!`;
+  if (iqob <= 40)   return `💎 Diamonds are made under pressure, semangat!`;
+  if (iqob <= 50)   return `🌱 Istiqomah itu proses, terus naik!`;
+  if (iqob <= 60)   return `🚀 Pekan depan pasti lebih baik, bismillah!`;
+  if (iqob <= 80)   return `💪 Setiap tetes keringat adalah investasi akhirat!`;
+  return `🏆 Yang terberat iqob-nya, yang terbesar potensinya!`;
+}
+
 function downloadIqobReport(){
   if(!_lastProgresData){alert('Muat data dulu');return;}
   const {cards,start,end}=_lastProgresData;
   const rangeLabel=getLabelRange(start,end);
   const now=new Date().toLocaleString('id-ID');
-  let txt=`LAPORAN IQOB MUTABAAH FIDIN JENGGOT MERAH\n`;
-  txt+=`Periode: ${rangeLabel}\n`;
-  txt+=`Digenerate: ${now}\n`;
-  txt+=`${'='.repeat(50)}\n\n`;
-  txt+=`TARGET GRUP AKTIF (${targets.size} amalan):\n`;
-  AMALAN.filter(a=>targets.has(a.id)).forEach(a=>{txt+=`  - ${a.name}\n`;});
-  txt+=`\n${'='.repeat(50)}\n`;
-  txt+=`REKAPITULASI IQOB PER ANGGOTA\n`;
-  txt+=`${'='.repeat(50)}\n\n`;
+  const totalTarget=cards[0]?.totalTargetOps||0;
 
-  // Sort by iqob desc for report
-  const sorted=[...cards].sort((a,b)=>b.totalIqob-a.totalIqob);
-  sorted.forEach((c,i)=>{
-    txt+=`${i+1}. ${c.nama}\n`;
-    txt+=`   Progres Target : ${c.avgPct}%\n`;
-    txt+=`   Iqob           : ${c.totalIqob} pushup (${c.totalIqob} amalan target terlewat)\n`;
-    if(!c.uid) txt+=`   Status         : Belum registrasi di app\n`;
-    txt+=`\n`;
+  // Sort by pct desc untuk rekap
+  const byPct=[...cards].sort((a,b)=>b.avgPct-a.avgPct);
+  // Sort by iqob desc untuk seksi iqob
+  const byIqob=[...cards].filter(c=>c.totalIqob>0).sort((a,b)=>b.totalIqob-a.totalIqob);
+
+  let txt=`🕌 MUTABAAH FIDIN JENGGOT MERAH\n`;
+  txt+=`📅 Periode: ${rangeLabel}\n`;
+  txt+=`🕐 Digenerate: ${now}\n`;
+  txt+=`${'─'.repeat(45)}\n\n`;
+
+  // Rekap per peserta
+  txt+=`👥 REKAP PER PESERTA\n`;
+  byPct.forEach(c=>{
+    const doneFrac=`${c.totalTargetDone}/${c.totalTargetOps}`;
+    const icon=c.avgPct>=70?'✅':'⚠️';
+    txt+=`${icon} ${c.nama} — ${doneFrac} (${c.avgPct}%)\n`;
   });
 
-  txt+=`${'='.repeat(50)}\n`;
-  txt+=`CATATAN:\n`;
-  txt+=`1 amalan target terlewat = 1 pushup iqob\n`;
-  txt+=`Iqob dihitung dari total amalan target yang tidak dicentang\ndalam periode yang dipilih.\n`;
+  txt+=`\n${'─'.repeat(45)}\n\n`;
+
+  if(byIqob.length===0){
+    txt+=`🎉 TIDAK ADA IQOB PEKAN INI!\n`;
+    txt+=`Semua ikhwah memenuhi target. MasyaAllah!\n`;
+  } else {
+    txt+=`🔴 IQOB PUSH UP\n\n`;
+    byIqob.forEach((c,i)=>{
+      const angka=['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
+      txt+=`${angka[i]||`${i+1}.`} ${c.nama}\n`;
+      // Cari amalan yang terlewat (totalTargetOps - totalTargetDone per hari tidak bisa detail dari sini)
+      txt+=`💪 Iqob: ${c.totalIqob} push up\n`;
+      txt+=`${getMotivIqob(c.totalIqob, c.nama)}\n\n`;
+    });
+  }
+
+  txt+=`${'─'.repeat(45)}\n`;
+  txt+=`📝 CATATAN:\n`;
+  txt+=`• 1 amalan target terlewat (per hari) = 10 push up iqob\n`;
+  txt+=`• Target grup: ${[...targets].length} amalan\n`;
+  txt+=`• Sampaikan dengan penuh mahabbah 💚\n`;
 
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain;charset=utf-8'}));

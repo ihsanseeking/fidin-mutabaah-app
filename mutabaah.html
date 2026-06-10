@@ -1451,6 +1451,18 @@ async function loadKomunitas() {
   }
 }
 
+// Motivasi sosial dinamis berdasarkan jumlah orang yang sudah selesai
+function getMotivasi(count, total) {
+  if (count === 0) return '✨ Jadilah yang pertama melakukannya hari ini!';
+  if (count === 1) return '🌟 Jadilah orang ke-2 yang melakukannya!';
+  if (count === 2) return '💪 Bergabunglah dengan 2 ikhwah yang sudah selesai!';
+  if (count < Math.floor(total * 0.3)) return `🔥 ${count} ikhwah sudah selesai — masih ada waktu!`;
+  if (count < Math.floor(total * 0.5)) return `⚡ Hampir setengah ikhwah sudah selesai, semangat!`;
+  if (count < Math.floor(total * 0.7)) return `🚀 Mayoritas ikhwah sudah selesai, jangan ketinggalan!`;
+  if (count < total) return `🏆 Hampir semua sudah selesai — ayo lengkapi barisan!`;
+  return `✅ Semua ikhwah sudah menyelesaikan ini, MasyaAllah!`;
+}
+
 function renderKomunitas(counts, total, today) {
   const container = document.getElementById('komunitas-content');
   if (!container) return;
@@ -1458,62 +1470,61 @@ function renderKomunitas(counts, total, today) {
   const d = new Date(today);
   const dayOfWeek = d.getDay();
   const showAmalan = DEFAULT_AMALAN.filter(a => {
-    if (a.id === 'puasa_senin_kamis') return [1,4].includes(dayOfWeek);
-    if (a.id === 'kahfi') return dayOfWeek === 5;
+    if (AMALAN_HARI[a.id]) return AMALAN_HARI[a.id].includes(dayOfWeek);
     return true;
   });
-  // Hitung anggota yang checkin hari ini (minimal 1 amalan target)
-  const uniqueUsers = new Set(
-    Object.entries(counts).filter(([id]) => groupTargets.has(id)).flatMap(() => [])
-  );
-  // Hitung anggota yang capai ≥70% amalan target
-  const targetAmalan = showAmalan.filter(a => groupTargets.has(a.id));
-  const targetTotal = targetAmalan.length;
 
-  // Per-user completion (perkiraan dari count data)
-  // Tampilkan summary challenger
-  const challengerRows = targetAmalan
+  // Top 3 amalan target dengan progress tertinggi
+  const targetAmalan = showAmalan.filter(a => groupTargets.has(a.id));
+  const top3 = [...targetAmalan]
     .map(a => ({ a, cnt: counts[a.id] || 0 }))
     .sort((x, y) => y.cnt - x.cnt)
     .slice(0, 3);
 
-  const totalCheckinUsers = targetAmalan.length > 0
-    ? Math.max(...targetAmalan.map(a => counts[a.id] || 0))
-    : 0;
+  const challengerHtml = top3.map(({a, cnt}, i) => {
+    const pct = Math.round(cnt / total * 100);
+    const medals = ['🥇','🥈','🥉'];
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px">${medals[i]} ${a.icon} ${a.name}</span>
+      <span style="font-family:var(--font-mono);font-size:13px;color:${pct>=70?'var(--green)':'var(--amber)'};font-weight:700">${cnt}/${total}</span>
+    </div>`;
+  }).join('');
 
+  // Semua amalan dengan progress bar + motivasi
   const rows = showAmalan.map(a => {
     const count = counts[a.id] || 0;
     const pct = Math.round(count / total * 100);
-    const barColor = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : 'var(--green-dim)';
-    return `<div style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-        <div style="font-size:13px;color:var(--text)">${a.icon} ${a.name}</div>
+    const barColor = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : 'var(--red)';
+    const isTarget = groupTargets.has(a.id);
+    const motivasi = getMotivasi(count, total);
+    return `<div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="font-size:13px;color:var(--text)">${a.icon} ${a.name}${isTarget ? ' <span style="color:var(--amber);font-size:10px">★</span>' : ''}</div>
         <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${count}/${total}</div>
       </div>
-      <div style="background:var(--surface2);border-radius:6px;height:8px;overflow:hidden">
-        <div style="background:${barColor};height:100%;width:${pct}%;border-radius:6px;transition:width 0.5s ease"></div>
+      <div style="background:var(--surface2);border-radius:6px;height:7px;overflow:hidden;margin-bottom:5px">
+        <div style="background:${barColor};height:100%;width:${pct}%;border-radius:6px;transition:width 0.6s ease"></div>
       </div>
+      <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${motivasi}</div>
     </div>`;
   }).join('');
-  // Challenger cards (top 3 amalan target)
-  const challengerHtml = challengerRows.map(({a, cnt}) => {
-    const pct = Math.round(cnt/total*100);
-    return `<div style="background:var(--surface2);border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:12px">${a.icon} ${a.name}</span>
-      <span style="font-family:var(--font-mono);font-size:13px;color:${pct>=70?'var(--green)':'var(--amber)'};font-weight:600">${cnt}/${total}</span>
-    </div>`;
-  }).join('');
+
+  // Hitung total aktif hari ini (berdasarkan amalan target yang paling banyak)
+  const maxActive = targetAmalan.length > 0
+    ? Math.max(...targetAmalan.map(a => counts[a.id] || 0), 0) : 0;
 
   container.innerHTML = `
     <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);margin-bottom:12px;text-align:center">
       ${dayNames[dayOfWeek]}, ${d.toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}
     </div>
     <div style="background:linear-gradient(135deg,rgba(74,222,128,0.08),rgba(251,191,36,0.05));border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px">
-      <div style="font-size:11px;font-family:var(--font-mono);color:var(--amber);margin-bottom:10px;letter-spacing:0.5px">🏆 PENCAPAIAN TERTINGGI HARI INI</div>
-      <div style="display:flex;flex-direction:column;gap:6px">${challengerHtml}</div>
-      <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);margin-top:10px;text-align:right">dari ${total} anggota · data real-time</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:11px;font-family:var(--font-mono);color:var(--amber);letter-spacing:0.5px">🏆 AMALAN TERPOPULER HARI INI</div>
+        <div style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)">${maxActive}/${total} aktif</div>
+      </div>
+      ${challengerHtml}
     </div>
-    <div style="font-size:12px;font-family:var(--font-mono);color:var(--text-muted);margin-bottom:10px">SEMUA AMALAN</div>
+    <div style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);margin-bottom:12px;letter-spacing:0.5px">SEMUA AMALAN — DATA ANONIM REAL-TIME</div>
     ${rows}
     <div style="text-align:center;margin-top:20px">
       <button onclick="loadKomunitas()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);border-radius:8px;padding:6px 20px;font-size:12px;font-family:var(--font-mono);cursor:pointer">↺ Refresh</button>
@@ -2055,9 +2066,18 @@ function renderChecklist() {
 
   // ── Helper: social motivation line ──
   function socialLine(id) {
-    const n = commCounts[id];
-    if (!n || n < 1) return '';
-    return `<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:3px">👥 ${n} anggota sudah ✓</div>`;
+    const n = commCounts[id] || 0;
+    const TOTAL = 11;
+    let msg;
+    if (n === 0)      msg = '✨ Jadilah yang pertama!';
+    else if (n === 1) msg = '🌟 Jadilah orang ke-2!';
+    else if (n === 2) msg = '💪 Bergabung dengan 2 ikhwah!';
+    else if (n < 4)   msg = `🔥 ${n} ikhwah sudah selesai`;
+    else if (n < 6)   msg = `⚡ ${n} ikhwah sudah — masih ada waktu!`;
+    else if (n < 9)   msg = `🚀 ${n}/${TOTAL} — jangan ketinggalan!`;
+    else if (n < TOTAL) msg = `🏆 Hampir semua selesai, ayo!`;
+    else               msg = `✅ Semua ikhwah selesai, MasyaAllah!`;
+    return `<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:3px">${msg}</div>`;
   }
 
   let html = '';
