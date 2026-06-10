@@ -291,7 +291,13 @@ function getLabelRange(s,e){
 }
 
 // ── RANGE STATE ────────────────────────────────
-let rangeState={mode:'harian',start:today(),end:today()};
+// Default pekanan agar ada data saat dibuka pertama kali
+const _t0=today(); const _d0=new Date(_t0);
+const _p0=getPekanOf(_t0);
+const _s0=toStr(new Date(_d0.getFullYear(),_d0.getMonth(),(_p0-1)*7+1));
+const _lastDay0=new Date(_d0.getFullYear(),_d0.getMonth()+1,0).getDate();
+const _e0=toStr(new Date(_d0.getFullYear(),_d0.getMonth(),Math.min(_p0*7,_lastDay0)));
+let rangeState={mode:'pekanan',start:_s0,end:_e0};
 
 function buildRangeBar(containerId, loadFn) {
   const c=document.getElementById(containerId);

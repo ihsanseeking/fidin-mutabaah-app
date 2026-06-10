@@ -1352,13 +1352,18 @@ async function syncTodayToSupabase() {
   if (!currentUserId) return;
   const today = getToday();
   const todayChecked = state.checked[today] || {};
-  const ops = DEFAULT_AMALAN.map(a => ({
-    user_id: currentUserId, tanggal: today, amalan_id: a.id,
-    checked: !!todayChecked[a.id],
-    checked_at: todayChecked[a.id] ? new Date(todayChecked[a.id]).toISOString() : null
-  }));
+  // Hanya sync yang checked=true — jangan timpa data lama dengan false
+  const checkedOps = DEFAULT_AMALAN
+    .filter(a => !!todayChecked[a.id])
+    .map(a => ({
+      user_id: currentUserId, tanggal: today, amalan_id: a.id,
+      checked: true,
+      checked_at: new Date(todayChecked[a.id]).toISOString()
+    }));
   try {
-    await db.from('mtb_daily_checkin').upsert(ops, { onConflict: 'user_id,tanggal,amalan_id' });
+    if (checkedOps.length > 0) {
+      await db.from('mtb_daily_checkin').upsert(checkedOps, { onConflict: 'user_id,tanggal,amalan_id' });
+    }
     const hal = state.tilawah?.[today] || 0;
     if (hal > 0) await syncTilawahToSupabase(hal);
   } catch(e) { console.warn('Bulk sync failed:', e.message); }
