@@ -520,6 +520,66 @@
   .duha-reminder.show { display: block; }
   @keyframes infaqPulse { 0%, 100% { border-color: var(--border); } 50% { border-color: var(--amber); box-shadow: 0 0 8px rgba(251,191,36,0.2); } }
 
+  /* === SHOLAT GROUP SUB-ROWS === */
+  .sholat-sub-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 4px; cursor: pointer;
+    border-radius: 6px; transition: background 0.15s;
+  }
+  .sholat-sub-row + .sholat-sub-row { border-top: 1px solid rgba(36,51,36,0.6); }
+  .sholat-sub-row:active { background: var(--surface2); }
+  .sholat-sub-row .sbox {
+    width: 18px; height: 18px; border: 1.5px solid var(--border); border-radius: 5px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    background: var(--surface2); transition: all 0.2s;
+  }
+  .sholat-sub-row.main-row .sbox { width: 22px; height: 22px; border-radius: 7px; }
+  .sholat-sub-row.checked .sbox { background: var(--green); border-color: var(--green); }
+  .sholat-sub-row .sbox svg { opacity: 0; transform: scale(0.4); transition: all 0.2s; }
+  .sholat-sub-row.checked .sbox svg { opacity: 1; transform: scale(1); }
+
+  /* === MAGHRIB RESET BANNER === */
+  .maghrib-banner {
+    margin: 0 20px 10px;
+    padding: 8px 14px;
+    background: rgba(251,191,36,0.08);
+    border: 1px solid rgba(251,191,36,0.3);
+    border-radius: 10px;
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-mono); font-size: 11px; color: var(--amber);
+    transition: opacity 0.3s;
+  }
+  .maghrib-banner.urgent { background: rgba(251,191,36,0.15); border-color: var(--amber); animation: infaqPulse 2s infinite; }
+
+  /* === RESET MODAL === */
+  .reset-modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    z-index: 9999; display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.3s ease;
+  }
+  .reset-modal-box {
+    background: var(--surface); border: 1px solid var(--green-dim);
+    border-radius: 20px; padding: 28px 24px; max-width: 320px; width: 90%;
+    text-align: center; animation: slideUp 0.3s ease;
+  }
+  .reset-modal-icon { font-size: 48px; margin-bottom: 12px; }
+  .reset-modal-title { font-family: var(--font-display); font-size: 22px; color: var(--green); margin-bottom: 6px; }
+  .reset-modal-hijri { font-family: var(--font-display); font-size: 16px; color: var(--amber); margin-bottom: 4px; }
+  .reset-modal-sub { font-size: 12px; color: var(--text-dim); font-family: var(--font-mono); margin-bottom: 20px; }
+  .reset-modal-btn { background: var(--green-dim); border: 1px solid var(--green); color: var(--green); border-radius: 10px; padding: 10px 24px; font-family: var(--font-mono); font-size: 13px; cursor: pointer; width: 100%; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* Sholat cumul summary */
+  .sholat-cumul-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; margin-bottom: 6px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px;
+  }
+  .sholat-cumul-row { display: flex; align-items: center; gap: 6px; }
+  .sholat-cumul-label { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); flex: 1; }
+  .sholat-cumul-val { font-size: 11px; font-family: var(--font-mono); font-weight: 600; }
+
   /* Category divider */
   .cat-divider {
     margin: 10px 0 6px;
@@ -1002,6 +1062,12 @@
     <div class="prayer-grid" id="prayerGrid">
       <!-- filled by JS -->
     </div>
+  </div>
+
+  <!-- MAGHRIB RESET BANNER -->
+  <div id="maghribBanner" class="maghrib-banner" style="display:none">
+    <span>⏰</span>
+    <span>Checklist berganti dalam <strong id="maghribCountdown">--</strong></span>
   </div>
 
   <!-- NEXT PRAYER COUNTDOWN -->
@@ -1742,6 +1808,40 @@ const AMALAN_HARI = {
 const PRAYER_NAMES = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
 const PRAYER_ICONS = ['🌙', '☀️', '🌤️', '🌅', '🌙'];
 
+// ── Sholat group definitions (rendered as cards with sub-rows) ──
+const SHOLAT_GROUPS = [
+  { key: 'maghrib', label: 'Sholat Maghrib', icon: '🌅', subs: [
+    { id: 'earlybird_maghrib', label: 'Early Bird',  icon: '🌄' },
+    { id: 'qobliyah_maghrib',  label: 'Qobliyah',    icon: '🙏' },
+    { id: 'maghrib',           label: 'Sholat Fardu',icon: '🕌', isMain: true },
+    { id: 'badiyah_maghrib',   label: "Ba'diyah",    icon: '🙏' },
+  ]},
+  { key: 'isya', label: 'Sholat Isya', icon: '🌙', subs: [
+    { id: 'earlybird_isya', label: 'Early Bird',  icon: '🌄' },
+    { id: 'isya',           label: 'Sholat Fardu',icon: '🕌', isMain: true },
+    { id: 'badiyah_isya',   label: "Ba'diyah",    icon: '🙏' },
+  ]},
+  { key: 'subuh', label: 'Sholat Subuh', icon: '🌄', subs: [
+    { id: 'earlybird_subuh', label: 'Early Bird',  icon: '🌄' },
+    { id: 'qobliyah_subuh',  label: 'Qobliyah',    icon: '🙏' },
+    { id: 'subuh',           label: 'Sholat Fardu',icon: '🕌', isMain: true },
+  ]},
+  { key: 'dzuhur', label: 'Sholat Dzuhur', icon: '☀️', subs: [
+    { id: 'earlybird_dzuhur', label: 'Early Bird',  icon: '🌄' },
+    { id: 'qobliyah_dzuhur',  label: 'Qobliyah',    icon: '🙏' },
+    { id: 'dzuhur',           label: 'Sholat Fardu',icon: '🕌', isMain: true },
+    { id: 'badiyah_dzuhur',   label: "Ba'diyah",    icon: '🙏' },
+  ]},
+  { key: 'ashar', label: 'Sholat Ashar', icon: '🌤️', subs: [
+    { id: 'earlybird_ashar', label: 'Early Bird',  icon: '🌄' },
+    { id: 'ashar',           label: 'Sholat Fardu',icon: '🕌', isMain: true },
+  ]},
+];
+const SHOLAT_GROUP_IDS = new Set(SHOLAT_GROUPS.flatMap(g => g.subs.map(s => s.id)));
+
+// Cumulative sholat targets (overrideable by PJ via admin)
+let SHOLAT_CUMUL_TARGETS = { fardu: 5, earlybird: 1, qobliyah: 2, badiyah: 2 };
+
 // =====================
 // STATE
 // =====================
@@ -1769,6 +1869,42 @@ let state = {
 function getToday() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function dateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Hari mutabaah: dimulai dari Maghrib. Setelah Maghrib → hari berikutnya.
+function getMutabaahDay() {
+  if (!prayerTimes.length) return getToday();
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const maghrib = prayerTimes.find(p => p.name === 'Maghrib');
+  if (maghrib && nowMin >= maghrib.minutes) {
+    const d = new Date(now); d.setDate(d.getDate() + 1);
+    return dateStr(d);
+  }
+  return getToday();
+}
+
+// Untuk Hijri display — gunakan tanggal mutabaah day
+function getHijriLabel(dateOverride) {
+  const d = dateOverride || new Date();
+  const hijriMonthNames = ["Muharram","Safar","Rabiul Awal","Rabiul Akhir","Jumadal Ula","Jumadal Akhirah","Rajab","Sya'ban","Ramadan","Syawal","Dzulqaidah","Dzulhijjah"];
+  // Algoritma Umm al-Qura sederhana
+  const jd = Math.floor(d.getTime() / 86400000) + 2440588;
+  let l = jd - 1948440 + 10632;
+  const n = Math.floor((l - 1) / 10631);
+  l = l - 10631 * n + 354;
+  const j = Math.floor((10985 - l) / 5316) * Math.floor((50 * l) / 17719)
+          + Math.floor(l / 5670) * Math.floor((43 * l) / 15238);
+  l = l - Math.floor((30 - j) / 15) * Math.floor((17719 * j) / 50)
+        - Math.floor(j / 16) * Math.floor((15238 * j) / 43) + 29;
+  const m = Math.floor((24 * l) / 709);
+  const day = l - Math.floor((709 * m) / 24);
+  const y = 30 * n + j - 30;
+  return `${day} ${hijriMonthNames[m - 1]} ${y}H`;
 }
 
 function loadState() {
@@ -1972,6 +2108,8 @@ function renderPrayerStrip() {
   document.getElementById('locLabel').textContent = `📍 ${state.settings.city}`;
 }
 
+let _lastMutabaahDay = null;
+
 function updateNextPrayer() {
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -1995,6 +2133,35 @@ function updateNextPrayer() {
   const badge = document.getElementById('reminderBadge');
   badge.textContent = `-${remMin} menit`;
 
+  // Maghrib banner — checklist reset countdown
+  const maghribPrayer = prayerTimes.find(p => p.name === 'Maghrib');
+  const banner = document.getElementById('maghribBanner');
+  const bannerTxt = document.getElementById('maghribCountdown');
+  if (banner && maghribPrayer) {
+    const diffMaghrib = maghribPrayer.minutes - nowMin;
+    if (diffMaghrib > 0 && diffMaghrib <= 60) {
+      const hh = Math.floor(diffMaghrib / 60);
+      const mm = diffMaghrib % 60;
+      const txt = hh > 0 ? `${hh}j ${String(mm).padStart(2,'0')}m` : `${mm} menit`;
+      if (bannerTxt) bannerTxt.textContent = txt;
+      banner.style.display = 'flex';
+      banner.classList.toggle('urgent', diffMaghrib <= 15);
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  // Day rollover detection — trigger reset when Maghrib hits
+  const currentMDay = getMutabaahDay();
+  if (_lastMutabaahDay && _lastMutabaahDay !== currentMDay) {
+    _lastMutabaahDay = currentMDay;
+    updateDate();
+    renderChecklist();
+    showResetModal();
+  } else {
+    _lastMutabaahDay = currentMDay;
+  }
+
   // Fire reminder
   const key = `${getToday()}_${nextPrayer.name}`;
   if (diffMin === remMin && !remindersFired[key]) {
@@ -2004,14 +2171,115 @@ function updateNextPrayer() {
   }
 }
 
+function showResetModal() {
+  const modal = document.getElementById('resetModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    setTimeout(() => closeResetModal(), 8000);
+  }
+}
+
+function closeResetModal() {
+  const modal = document.getElementById('resetModal');
+  if (modal) modal.style.display = 'none';
+}
+
 // =====================
 // CHECKLIST RENDER
 // =====================
 
 function getTodayChecked() {
-  const today = getToday();
+  const today = getMutabaahDay();
   if (!state.checked[today]) state.checked[today] = {};
   return state.checked[today];
+}
+
+// ── Helper: render satu sholat group card (mirip QL) ──
+function renderSholatGroup(groupDef, todayChecked, todayDow, commCounts) {
+  const enabled = state.settings.amalanEnabled;
+  const visibleSubs = groupDef.subs.filter(s => {
+    if (enabled[s.id] === false) return false;
+    if (AMALAN_HARI[s.id] && !AMALAN_HARI[s.id].includes(todayDow)) return false;
+    return true;
+  });
+  if (visibleSubs.length === 0) return '';
+
+  const mainSub   = visibleSubs.find(s => s.isMain);
+  const mainDone  = mainSub ? !!todayChecked[mainSub.id] : false;
+  const isTarget  = mainSub ? groupTargets.has(mainSub.id) : false;
+  const checkedCount = visibleSubs.filter(s => !!todayChecked[s.id]).length;
+
+  const subRows = visibleSubs.map(s => {
+    const isChecked = !!todayChecked[s.id];
+    const checkTime = todayChecked[s.id] ? formatTime(new Date(todayChecked[s.id])) : '';
+    const n = commCounts[s.id] || 0;
+    const TOTAL = 11;
+    let socialTxt = n === 0 ? '✨ Pertama!' : n < 3 ? `🌟 ${n} ikhwah` : `👥 ${n}/${TOTAL}`;
+    return `
+      <div class="sholat-sub-row ${isChecked ? 'checked' : ''} ${s.isMain ? 'main-row' : ''}" onclick="toggleCheck('${s.id}')">
+        <div class="sbox">
+          <svg width="10" height="8" viewBox="0 0 12 10" fill="none">
+            <path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:${s.isMain ? '14px' : '12px'};color:${isChecked ? 'var(--green)' : s.isMain ? 'var(--text)' : 'var(--text-dim)'};font-weight:${s.isMain ? '600' : '400'};line-height:1.3">
+            ${s.icon} ${s.label}${s.isMain && isTarget ? ' <span style="color:var(--amber);font-size:11px">★</span>' : ''}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono)">${socialTxt}</span>
+          ${checkTime ? `<span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">${checkTime}</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="tilawah-card" style="${isTarget ? 'border-left:3px solid var(--amber)' : ''}">
+      <div class="tilawah-header" style="margin-bottom:6px">
+        <div class="tilawah-check ${mainDone ? 'done' : ''}" onclick="toggleCheck('${mainSub?.id}')">
+          <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+            <path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="tilawah-title">${groupDef.icon} ${groupDef.label}${isTarget ? ' <span style="color:var(--amber);font-size:11px">★</span>' : ''}</div>
+        <div class="tilawah-pct">${checkedCount}/${visibleSubs.length}</div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:0 -2px;padding:4px 2px 2px">
+        ${subRows}
+      </div>
+    </div>`;
+}
+
+// ── Cumulative sholat summary card ──
+function renderSholatCumulCard(todayChecked, todayDow) {
+  const allIds = {
+    fardu:     ['subuh','dzuhur','ashar','maghrib','isya'].filter(id => !AMALAN_HARI[id] || AMALAN_HARI[id].includes(todayDow)),
+    earlybird: ['earlybird_subuh','earlybird_dzuhur','earlybird_ashar','earlybird_maghrib','earlybird_isya'].filter(id => !AMALAN_HARI[id] || AMALAN_HARI[id].includes(todayDow)),
+    qobliyah:  ['qobliyah_subuh','qobliyah_dzuhur','qobliyah_maghrib'].filter(id => !AMALAN_HARI[id] || AMALAN_HARI[id].includes(todayDow)),
+    badiyah:   ['badiyah_dzuhur','badiyah_maghrib','badiyah_isya'].filter(id => !AMALAN_HARI[id] || AMALAN_HARI[id].includes(todayDow)),
+  };
+  const count = k => allIds[k].filter(id => !!todayChecked[id]).length;
+  const total = k => allIds[k].length;
+  const tgt   = k => SHOLAT_CUMUL_TARGETS[k] || 0;
+  const done  = k => count(k) >= tgt(k);
+  const col   = k => done(k) ? 'var(--green)' : count(k) > 0 ? 'var(--amber)' : 'var(--text-muted)';
+
+  const rows = [
+    ['fardu',    '🕌', 'Sholat Fardu'],
+    ['earlybird','🌄', 'Early Bird'],
+    ['qobliyah', '🙏', 'Qobliyah'],
+    ['badiyah',  '🙏', "Ba'diyah"],
+  ].map(([k, ic, lb]) => `
+    <div class="sholat-cumul-row">
+      <span class="sholat-cumul-label">${ic} ${lb}</span>
+      <span class="sholat-cumul-val" style="color:${col(k)}">${count(k)}/${total(k)}${done(k) ? ' ✓' : ''}</span>
+    </div>`).join('');
+
+  return `
+    <div class="sholat-cumul-card">
+      ${rows}
+    </div>`;
 }
 
 function renderChecklist() {
@@ -2037,7 +2305,7 @@ function renderChecklist() {
   const infaqPending = !todayChecked['infaq'];
 
   // Tilawah progress
-  const today = getToday();
+  const today = getMutabaahDay();
   if (!state.tilawah) state.tilawah = {};
   if (!state.tilawah[today]) state.tilawah[today] = 0;
   const tilawahHalaman = state.tilawah[today];
@@ -2054,14 +2322,7 @@ function renderChecklist() {
   // Puasa label
   const hariPuasa = todayDow === 1 ? 'Senin' : 'Kamis';
 
-  // Group by category
-  const cats = {};
-  activeAmalan.forEach(a => {
-    if (!cats[a.category]) cats[a.category] = [];
-    cats[a.category].push(a);
-  });
-
-  // ── Komunitas counts (untuk social motivation) ──
+  // ── Komunitas counts ──
   const commCounts = window._komCounts || {};
 
   // ── Helper: social motivation line ──
@@ -2080,9 +2341,29 @@ function renderChecklist() {
     return `<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:3px">${msg}</div>`;
   }
 
-  let html = '';
+  // ── Helper: render simple check item ──
+  function checkItem(a, labelOverride, metaOverride, extraClass) {
+    const isChecked = !!todayChecked[a.id];
+    const checkTime = todayChecked[a.id] ? formatTime(new Date(todayChecked[a.id])) : '';
+    const isTarget = groupTargets.has(a.id);
+    const lbl = labelOverride || `${a.icon} ${a.name}${isTarget ? ' <span style="color:var(--amber);font-size:11px">★</span>' : ''}`;
+    const meta = metaOverride !== undefined ? metaOverride : a.meta;
+    return `
+      <div class="check-item ${isChecked?'checked':''} ${extraClass||''}" style="${isTarget?'border-left:3px solid var(--amber)':''}" onclick="toggleCheck('${a.id}')">
+        <div class="check-box"><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="check-content">
+          <div class="check-name">${lbl}</div>
+          <div class="check-meta">${meta}</div>
+          ${socialLine(a.id)}
+        </div>
+        <div class="check-time">${checkTime}</div>
+      </div>`;
+  }
 
-  // ── IQOB CARD di paling atas ──
+  let html = '';
+  const sec = (label) => `<div class="cat-divider"><span>${label}</span></div>`;
+
+  // ── IQOB CARD ──
   if ((state.iqob?.hutang || 0) > 0) {
     html += `
       <div class="tilawah-card" style="border-left:3px solid var(--red);margin-bottom:4px">
@@ -2091,9 +2372,7 @@ function renderChecklist() {
           <div class="tilawah-title" style="color:var(--red)">Hutang Iqob</div>
           <div class="tilawah-pct" style="color:var(--red)">${state.iqob.hutang} pushup</div>
         </div>
-        <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);margin:4px 0 10px">
-          Dari amalan target kemarin yang terlewat. 1 amalan = 10 pushup.
-        </div>
+        <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);margin:4px 0 10px">Dari amalan target kemarin yang terlewat. 1 amalan = 10 pushup.</div>
         <div style="display:flex;gap:8px">
           <button onclick="settleIqob(10)" style="flex:1;background:rgba(248,113,113,0.1);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:7px;font-size:12px;font-family:var(--font-mono);cursor:pointer">✓ 10 pushup</button>
           <button onclick="settleIqob(state.iqob.hutang)" style="flex:1;background:rgba(248,113,113,0.15);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:7px;font-size:12px;font-family:var(--font-mono);cursor:pointer">✓ Lunas semua</button>
@@ -2101,266 +2380,283 @@ function renderChecklist() {
       </div>`;
   }
 
-  Object.entries(cats).forEach(([cat, items]) => {
-    html += `<div class="cat-divider"><span>${cat}</span></div>`;
-    items.forEach(a => {
-      const isChecked = !!todayChecked[a.id];
-      const checkTime = todayChecked[a.id] ? formatTime(new Date(todayChecked[a.id])) : '';
+  // ════════════════════════════════════════════════
+  // SECTION 1: IBADAH HARIAN (non-waktu)
+  // ════════════════════════════════════════════════
+  html += sec('Ibadah Harian');
 
-      // === OLAHRAGA: progressive menit ===
-      if (a.id === 'olahraga') {
-        if (!state.olahraga) state.olahraga = {};
-        const menit = state.olahraga[today] || 0;
-        const target = OLAHRAGA_TARGET_MENIT;
-        const pct = Math.min(100, Math.round(menit/target*100));
-        const done = menit >= target;
-        const isTarget = groupTargets.has('olahraga');
-        html += `
-          <div class="tilawah-card" style="${isTarget?'border-left:3px solid var(--amber)':''}">
-            <div class="tilawah-header">
-              <div class="tilawah-check ${done?'done':''}" onclick="updateOlahraga(0)">
-                <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </div>
-              <div class="tilawah-title">🏃 Olahraga${isTarget?' <span style="color:var(--amber);font-size:11px">★</span>':''}</div>
-              <div class="tilawah-pct">${pct}%</div>
-            </div>
-            <div class="tilawah-bar-wrap"><div class="tilawah-bar-fill" style="width:${pct}%"></div></div>
-            <div class="tilawah-controls">
-              <div class="tilawah-label">${menit} / ${target} menit${done?' 🎉':''}</div>
-              <button class="tilawah-btn" onclick="updateOlahraga(-5)">−5</button>
-              <div class="tilawah-num">${menit}</div>
-              <button class="tilawah-btn" onclick="updateOlahraga(5)">+5</button>
-              <button class="tilawah-btn" onclick="updateOlahraga(10)" style="font-size:11px;width:36px">+10</button>
-              <button class="tilawah-btn" onclick="updateOlahraga(15)" style="font-size:11px;width:36px">+15</button>
-            </div>
-            ${socialLine('olahraga')}
-          </div>`;
-        return;
-      }
-
-      // === DZIKIR (istighfar, sholawat, tasbih): counter ===
-      if (['istighfar','sholawat','tasbih'].includes(a.id)) {
-        if (!state.dzikir) state.dzikir = {};
-        if (!state.dzikir[today]) state.dzikir[today] = {};
-        const count = state.dzikir[today][a.id] || 0;
-        const target = DZIKIR_TARGETS[a.id] || 100;
-        const pct = Math.min(100, Math.round(count/target*100));
-        const done = count >= target;
-        const isTarget = groupTargets.has(a.id);
-        html += `
-          <div class="tilawah-card" style="${isTarget?'border-left:3px solid var(--amber)':''}">
-            <div class="tilawah-header">
-              <div class="tilawah-check ${done?'done':''}" onclick="updateDzikir('${a.id}',0)">
-                <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </div>
-              <div class="tilawah-title">${a.icon} ${a.name}${isTarget?' <span style="color:var(--amber);font-size:11px">★</span>':''}</div>
-              <div class="tilawah-pct">${count}×</div>
-            </div>
-            <div class="tilawah-bar-wrap"><div class="tilawah-bar-fill" style="width:${pct}%"></div></div>
-            <div class="tilawah-controls">
-              <div class="tilawah-label">${count} / ${target}×${done?' ✨':''}</div>
-              <button class="tilawah-btn" onclick="updateDzikir('${a.id}',-33)">−33</button>
-              <button class="tilawah-btn" onclick="updateDzikir('${a.id}',33)">+33</button>
-              <button class="tilawah-btn" onclick="updateDzikir('${a.id}',100)" style="font-size:11px;width:40px">+100</button>
-            </div>
-            ${socialLine(a.id)}
-          </div>`;
-        return;
-      }
-
-      // === QL: sub-detail card (Tahajud + Witir) ===
-      if (a.id === 'ql') {
-        const qlSub   = state.ql_sub?.[today] || { tahajud: 0, witir: 0 };
-        const qlTotal = qlSub.tahajud + qlSub.witir;
-        const qlMin   = 5;
-        const qlDone  = qlSub.witir >= 1 && qlTotal >= qlMin;
-        const qlPct   = Math.min(100, Math.round(qlTotal / qlMin * 100));
-        const isTarget = groupTargets.has('ql');
-        const witirColor = qlSub.witir >= 1 ? 'var(--green)' : 'var(--amber)';
-        html += `
-          <div class="tilawah-card" style="${isTarget ? 'border-left:3px solid var(--amber)' : ''}">
-            <div class="tilawah-header">
-              <div class="tilawah-check ${qlDone ? 'done' : ''}" onclick="toggleCheck('ql')">
-                <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-                  <path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
-              <div class="tilawah-title">🌙 Sholat Malam${isTarget ? ' <span style="color:var(--amber);font-size:11px">★</span>' : ''}</div>
-              <div class="tilawah-pct">${qlTotal} rk</div>
-            </div>
-            <div style="border-top:1px solid var(--border);margin:8px -2px;padding:10px 2px 4px">
-              <!-- Qiyamul Lail / Tahajud -->
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-                <div style="font-size:12px;color:var(--text-dim)">🌙 Tahajud / QL
-                  <span style="font-family:var(--font-mono);font-size:12px;color:var(--green);margin-left:6px">${qlSub.tahajud} rk</span>
-                </div>
-                <div style="display:flex;gap:4px">
-                  <button class="tilawah-btn" onclick="updateQLSub('tahajud',-2)">−2</button>
-                  <button class="tilawah-btn" onclick="updateQLSub('tahajud',2)">+2</button>
-                  <button class="tilawah-btn" onclick="updateQLSub('tahajud',4)" style="font-size:11px;width:32px">+4</button>
-                </div>
-              </div>
-              <!-- Witir -->
-              <div style="display:flex;justify-content:space-between;align-items:center">
-                <div style="font-size:12px;color:var(--text-dim)">🕯️ Witir
-                  <span style="font-family:var(--font-mono);font-size:12px;color:${witirColor};margin-left:6px">${qlSub.witir} rk${qlSub.witir >= 1 ? ' ✓' : ' ⚠️'}</span>
-                </div>
-                <div style="display:flex;gap:4px">
-                  <button class="tilawah-btn" onclick="updateQLSub('witir',-1)">−1</button>
-                  <button class="tilawah-btn" onclick="updateQLSub('witir',1)">+1</button>
-                  <button class="tilawah-btn" onclick="updateQLSub('witir',3)" style="font-size:11px;width:32px">+3</button>
-                </div>
-              </div>
-            </div>
-            <div class="tilawah-bar-wrap">
-              <div class="tilawah-bar-fill" style="width:${qlPct}%"></div>
-            </div>
-            <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);margin-top:5px;display:flex;justify-content:space-between">
-              <span>${qlTotal} / ${qlMin} rokaat min.</span>
-              <span style="color:${qlSub.witir>=1?'var(--green)':'var(--amber)'}">
-                ${qlSub.witir >= 1 ? '✓ Witir done' : '⚠ Belum witir'}
-              </span>
-            </div>
-          </div>`;
-        return;
-      }
-
-      // === TILAWAH: special progress card ===
-      if (a.id === '1juz') {
-        const isTarget = groupTargets.has('1juz');
-        html += `
-          <div class="tilawah-card" style="${isTarget?'border-left:3px solid var(--amber)':''}">
-            <div class="tilawah-header">
-              <div class="tilawah-check ${tilawahDone ? 'done' : ''}" onclick="toggleCheck('1juz')">
-                <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-                  <path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
-              <div class="tilawah-title">📖 Tilawah${isTarget?' <span style="color:var(--amber);font-size:11px">★</span>':''}</div>
-              <div class="tilawah-pct">${tilawahPct}%</div>
-            </div>
-            <div class="tilawah-bar-wrap">
-              <div class="tilawah-bar-fill" style="width:${tilawahPct}%"></div>
-            </div>
-            <div class="tilawah-controls">
-              <div class="tilawah-label">${tilawahLabel}${tilawahDone ? ' 🎉' : ''}</div>
-              <button class="tilawah-btn" onclick="updateTilawah(-1)">−</button>
-              <div class="tilawah-num">${tilawahHalaman}</div>
-              <button class="tilawah-btn" onclick="updateTilawah(1)">+</button>
-              <button class="tilawah-btn" onclick="updateTilawah(2)" style="font-size:11px;width:40px;font-family:var(--font-mono)">+2</button>
-            </div>
-            ${socialLine('1juz')}
-          </div>`;
-        return;
-      }
-
-      // === DUHA: rokaat counter + reminder ===
-      if (a.id === 'duha') {
-        const duhaRokaat = state.rokaat?.[today]?.duha || 0;
-        const duhaMin = 2;
-        const duhaDone = duhaRokaat >= duhaMin;
-        const duhaPct = Math.min(100, Math.round(duhaRokaat / duhaMin * 100));
-        const isTarget = groupTargets.has('duha');
-        html += `
-          <div class="tilawah-card ${duhaActive ? 'infaq-pulse' : ''}" style="${isTarget ? 'border-left:3px solid var(--amber)' : ''}">
-            <div class="tilawah-header">
-              <div class="tilawah-check ${duhaDone ? 'done' : ''}" onclick="toggleCheck('duha')">
-                <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-                  <path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
-              <div class="tilawah-title">🌤️ Sholat Duha${isTarget ? ' <span style="color:var(--amber);font-size:11px">★</span>' : ''}</div>
-              <div class="tilawah-pct">${duhaRokaat} rk</div>
-            </div>
-            ${duhaActive ? `<div style="font-size:11px;color:var(--amber);font-family:var(--font-mono);padding:2px 0 4px;margin:0 2px">⏳ Sebelum Dzuhur (${prayerTimes[1]?.time || '11:53'})</div>` : ''}
-            <div class="tilawah-bar-wrap">
-              <div class="tilawah-bar-fill" style="width:${duhaPct}%"></div>
-            </div>
-            <div class="tilawah-controls">
-              <div class="tilawah-label">${duhaRokaat} rokaat · min. ${duhaMin}</div>
-              <button class="tilawah-btn" onclick="updateRokaat('duha',-2)">−2</button>
-              <div class="tilawah-num">${duhaRokaat}</div>
-              <button class="tilawah-btn" onclick="updateRokaat('duha',2)">+2</button>
-              <button class="tilawah-btn" onclick="updateRokaat('duha',4)" style="font-size:11px;width:36px;font-family:var(--font-mono)">+4</button>
-            </div>
-          </div>`;
-        return;
-      }
-
-      // === INFAQ: pulse kalau belum dicentang setelah sholat ===
-      if (a.id === 'infaq') {
-        const infaqAlert = infaqPending && nowMin > (prayerTimes[0]?.minutes || 277);
-        html += `
-          <div class="check-item ${isChecked ? 'checked' : ''} ${infaqAlert ? 'infaq-pulse' : ''}" onclick="toggleCheck('${a.id}')">
-            <div class="check-box">
-              <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-                <path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="check-content">
-              <div class="check-name">${a.icon} ${a.name}</div>
-              <div class="check-meta">${infaqAlert ? '💛 Belum infaq hari ini' : a.meta}</div>
-            </div>
-            <div class="check-time">${checkTime}</div>
-          </div>`;
-        return;
-      }
-
-      // === PUASA SENIN KAMIS ===
-      if (a.id === 'puasa_senin_kamis') {
-        html += `
-          <div class="check-item ${isChecked ? 'checked' : ''}" onclick="toggleCheck('${a.id}')">
-            <div class="check-box">
-              <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-                <path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="check-content">
-              <div class="check-name">${a.icon} Puasa ${hariPuasa}</div>
-              <div class="check-meta">Puasa sunnah hari ini</div>
-            </div>
-            <div class="check-time">${checkTime}</div>
-          </div>`;
-        return;
-      }
-
-      // === DEFAULT check item ===
-      const isTarget = groupTargets.has(a.id);
-      const sc = socialLine(a.id);
-      html += `
-        <div class="check-item ${isChecked ? 'checked' : ''}" style="${isTarget ? 'border-left:3px solid var(--amber)' : ''}" onclick="toggleCheck('${a.id}')">
-          <div class="check-box">
-            <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-              <path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+  // Tilawah
+  if (enabled['1juz'] !== false) {
+    const isTarget = groupTargets.has('1juz');
+    html += `
+      <div class="tilawah-card" style="${isTarget?'border-left:3px solid var(--amber)':''}">
+        <div class="tilawah-header">
+          <div class="tilawah-check ${tilawahDone?'done':''}" onclick="toggleCheck('1juz')">
+            <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
-          <div class="check-content">
-            <div class="check-name">${a.icon} ${a.name}${isTarget ? ' <span style="color:var(--amber);font-size:11px">★</span>' : ''}</div>
-            <div class="check-meta">${a.meta}</div>
-            ${sc}
+          <div class="tilawah-title">📖 Tilawah${isTarget?' <span style="color:var(--amber);font-size:11px">★</span>':''}</div>
+          <div class="tilawah-pct">${tilawahPct}%</div>
+        </div>
+        <div class="tilawah-bar-wrap"><div class="tilawah-bar-fill" style="width:${tilawahPct}%"></div></div>
+        <div class="tilawah-controls">
+          <div class="tilawah-label">${tilawahLabel}${tilawahDone?' 🎉':''}</div>
+          <button class="tilawah-btn" onclick="updateTilawah(-1)">−</button>
+          <div class="tilawah-num">${tilawahHalaman}</div>
+          <button class="tilawah-btn" onclick="updateTilawah(1)">+</button>
+          <button class="tilawah-btn" onclick="updateTilawah(2)" style="font-size:11px;width:40px;font-family:var(--font-mono)">+2</button>
+        </div>
+        ${socialLine('1juz')}
+      </div>`;
+  }
+
+  // Olahraga
+  if (enabled['olahraga'] !== false) {
+    if (!state.olahraga) state.olahraga = {};
+    const menit = state.olahraga[today] || 0;
+    const target = OLAHRAGA_TARGET_MENIT;
+    const pct = Math.min(100, Math.round(menit/target*100));
+    const done = menit >= target;
+    const isTarget = groupTargets.has('olahraga');
+    html += `
+      <div class="tilawah-card" style="${isTarget?'border-left:3px solid var(--amber)':''}">
+        <div class="tilawah-header">
+          <div class="tilawah-check ${done?'done':''}" onclick="updateOlahraga(0)">
+            <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
-          <div class="check-time">${checkTime}</div>
-        </div>`;
-    });
+          <div class="tilawah-title">🏃 Olahraga${isTarget?' <span style="color:var(--amber);font-size:11px">★</span>':''}</div>
+          <div class="tilawah-pct">${pct}%</div>
+        </div>
+        <div class="tilawah-bar-wrap"><div class="tilawah-bar-fill" style="width:${pct}%"></div></div>
+        <div class="tilawah-controls">
+          <div class="tilawah-label">${menit} / ${target} menit${done?' 🎉':''}</div>
+          <button class="tilawah-btn" onclick="updateOlahraga(-5)">−5</button>
+          <div class="tilawah-num">${menit}</div>
+          <button class="tilawah-btn" onclick="updateOlahraga(5)">+5</button>
+          <button class="tilawah-btn" onclick="updateOlahraga(10)" style="font-size:11px;width:36px">+10</button>
+          <button class="tilawah-btn" onclick="updateOlahraga(15)" style="font-size:11px;width:36px">+15</button>
+        </div>
+        ${socialLine('olahraga')}
+      </div>`;
+  }
+
+  // Dzikir (Istighfar, Sholawat, Tasbih)
+  ['istighfar','sholawat','tasbih'].forEach(did => {
+    const a = DEFAULT_AMALAN.find(x => x.id === did);
+    if (!a || enabled[did] === false) return;
+    if (!state.dzikir) state.dzikir = {};
+    if (!state.dzikir[today]) state.dzikir[today] = {};
+    const count = state.dzikir[today][did] || 0;
+    const target = DZIKIR_TARGETS[did] || 100;
+    const pct = Math.min(100, Math.round(count/target*100));
+    const done = count >= target;
+    const isTarget = groupTargets.has(did);
+    html += `
+      <div class="tilawah-card" style="${isTarget?'border-left:3px solid var(--amber)':''}">
+        <div class="tilawah-header">
+          <div class="tilawah-check ${done?'done':''}" onclick="updateDzikir('${did}',0)">
+            <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="tilawah-title">${a.icon} ${a.name}${isTarget?' <span style="color:var(--amber);font-size:11px">★</span>':''}</div>
+          <div class="tilawah-pct">${count}×</div>
+        </div>
+        <div class="tilawah-bar-wrap"><div class="tilawah-bar-fill" style="width:${pct}%"></div></div>
+        <div class="tilawah-controls">
+          <div class="tilawah-label">${count} / ${target}×${done?' ✨':''}</div>
+          <button class="tilawah-btn" onclick="updateDzikir('${did}',-33)">−33</button>
+          <button class="tilawah-btn" onclick="updateDzikir('${did}',33)">+33</button>
+          <button class="tilawah-btn" onclick="updateDzikir('${did}',100)" style="font-size:11px;width:40px">+100</button>
+        </div>
+        ${socialLine(did)}
+      </div>`;
   });
+
+  // Infaq
+  const aInfaq = DEFAULT_AMALAN.find(x => x.id === 'infaq');
+  if (aInfaq && enabled['infaq'] !== false) {
+    const infaqAlert = !todayChecked['infaq'] && nowMin > (prayerTimes[0]?.minutes || 277);
+    const isChecked = !!todayChecked['infaq'];
+    const checkTime = todayChecked['infaq'] ? formatTime(new Date(todayChecked['infaq'])) : '';
+    const isTarget = groupTargets.has('infaq');
+    html += `
+      <div class="check-item ${isChecked?'checked':''} ${infaqAlert?'infaq-pulse':''}" style="${isTarget?'border-left:3px solid var(--amber)':''}" onclick="toggleCheck('infaq')">
+        <div class="check-box"><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="check-content">
+          <div class="check-name">${aInfaq.icon} ${aInfaq.name}${isTarget?' <span style="color:var(--amber);font-size:11px">★</span>':''}</div>
+          <div class="check-meta">${infaqAlert?'💛 Belum infaq hari ini':aInfaq.meta}</div>
+          ${socialLine('infaq')}
+        </div>
+        <div class="check-time">${checkTime}</div>
+      </div>`;
+  }
+
+  // Puasa Senin Kamis
+  const aPuasa = DEFAULT_AMALAN.find(x => x.id === 'puasa_senin_kamis');
+  if (aPuasa && enabled['puasa_senin_kamis'] !== false && [1,4].includes(todayDow)) {
+    const hariPuasa = todayDow === 1 ? 'Senin' : 'Kamis';
+    const isChecked = !!todayChecked['puasa_senin_kamis'];
+    const checkTime = todayChecked['puasa_senin_kamis'] ? formatTime(new Date(todayChecked['puasa_senin_kamis'])) : '';
+    const isTarget = groupTargets.has('puasa_senin_kamis');
+    html += `
+      <div class="check-item ${isChecked?'checked':''}" style="${isTarget?'border-left:3px solid var(--amber)':''}" onclick="toggleCheck('puasa_senin_kamis')">
+        <div class="check-box"><svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="check-content">
+          <div class="check-name">${aPuasa.icon} Puasa ${hariPuasa}${isTarget?' <span style="color:var(--amber);font-size:11px">★</span>':''}</div>
+          <div class="check-meta">Puasa sunnah hari ini</div>
+          ${socialLine('puasa_senin_kamis')}
+        </div>
+        <div class="check-time">${checkTime}</div>
+      </div>`;
+  }
+
+  // ════════════════════════════════════════════════
+  // SECTION 2: MALAM (dari Maghrib)
+  // ════════════════════════════════════════════════
+  html += sec('Malam · Maghrib → Isya → Malam');
+
+  // Sholat Maghrib group
+  html += renderSholatGroup(SHOLAT_GROUPS.find(g=>g.key==='maghrib'), todayChecked, todayDow, commCounts);
+
+  // Sholat Isya group
+  html += renderSholatGroup(SHOLAT_GROUPS.find(g=>g.key==='isya'), todayChecked, todayDow, commCounts);
+
+  // QL (Sholat Malam)
+  if (enabled['ql'] !== false) {
+    const qlSub   = state.ql_sub?.[today] || { tahajud: 0, witir: 0 };
+    const qlTotal = qlSub.tahajud + qlSub.witir;
+    const qlMin   = 5;
+    const qlDone  = qlSub.witir >= 1 && qlTotal >= qlMin;
+    const qlPct   = Math.min(100, Math.round(qlTotal / qlMin * 100));
+    const isTarget = groupTargets.has('ql');
+    const witirColor = qlSub.witir >= 1 ? 'var(--green)' : 'var(--amber)';
+    html += `
+      <div class="tilawah-card" style="${isTarget?'border-left:3px solid var(--amber)':''}">
+        <div class="tilawah-header">
+          <div class="tilawah-check ${qlDone?'done':''}" onclick="toggleCheck('ql')">
+            <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="tilawah-title">🌙 Sholat Malam (QL)${isTarget?' <span style="color:var(--amber);font-size:11px">★</span>':''}</div>
+          <div class="tilawah-pct">${qlTotal} rk</div>
+        </div>
+        <div style="border-top:1px solid var(--border);margin:8px -2px;padding:10px 2px 4px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-size:12px;color:var(--text-dim)">🌙 Tahajud / QL <span style="font-family:var(--font-mono);font-size:12px;color:var(--green);margin-left:6px">${qlSub.tahajud} rk</span></div>
+            <div style="display:flex;gap:4px">
+              <button class="tilawah-btn" onclick="updateQLSub('tahajud',-2)">−2</button>
+              <button class="tilawah-btn" onclick="updateQLSub('tahajud',2)">+2</button>
+              <button class="tilawah-btn" onclick="updateQLSub('tahajud',4)" style="font-size:11px;width:32px">+4</button>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:12px;color:var(--text-dim)">🕯️ Witir <span style="font-family:var(--font-mono);font-size:12px;color:${witirColor};margin-left:6px">${qlSub.witir} rk${qlSub.witir>=1?' ✓':' ⚠️'}</span></div>
+            <div style="display:flex;gap:4px">
+              <button class="tilawah-btn" onclick="updateQLSub('witir',-1)">−1</button>
+              <button class="tilawah-btn" onclick="updateQLSub('witir',1)">+1</button>
+              <button class="tilawah-btn" onclick="updateQLSub('witir',3)" style="font-size:11px;width:32px">+3</button>
+            </div>
+          </div>
+        </div>
+        <div class="tilawah-bar-wrap"><div class="tilawah-bar-fill" style="width:${qlPct}%"></div></div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-dim);margin-top:5px;display:flex;justify-content:space-between">
+          <span>${qlTotal} / ${qlMin} rokaat min.</span>
+          <span style="color:${qlSub.witir>=1?'var(--green)':'var(--amber)'}">${qlSub.witir>=1?'✓ Witir done':'⚠ Belum witir'}</span>
+        </div>
+      </div>`;
+  }
+
+  // ════════════════════════════════════════════════
+  // SECTION 3: SUBUH & PAGI
+  // ════════════════════════════════════════════════
+  html += sec('Subuh & Pagi');
+
+  // Sholat Subuh group
+  html += renderSholatGroup(SHOLAT_GROUPS.find(g=>g.key==='subuh'), todayChecked, todayDow, commCounts);
+
+  // Dzikir Pagi
+  const aDzPagi = DEFAULT_AMALAN.find(x => x.id === 'dzikir_pagi');
+  if (aDzPagi && enabled['dzikir_pagi'] !== false) {
+    html += checkItem(aDzPagi);
+  }
+
+  // Sholat Duha
+  if (enabled['duha'] !== false) {
+    const duhaRokaat = state.rokaat?.[today]?.duha || 0;
+    const duhaMin = 2;
+    const duhaDone = duhaRokaat >= duhaMin;
+    const duhaPct = Math.min(100, Math.round(duhaRokaat/duhaMin*100));
+    const isTarget = groupTargets.has('duha');
+    html += `
+      <div class="tilawah-card ${duhaActive?'infaq-pulse':''}" style="${isTarget?'border-left:3px solid var(--amber)':''}">
+        <div class="tilawah-header">
+          <div class="tilawah-check ${duhaDone?'done':''}" onclick="toggleCheck('duha')">
+            <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1.5" stroke="#0b140b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="tilawah-title">🌤️ Sholat Duha${isTarget?' <span style="color:var(--amber);font-size:11px">★</span>':''}</div>
+          <div class="tilawah-pct">${duhaRokaat} rk</div>
+        </div>
+        ${duhaActive?`<div style="font-size:11px;color:var(--amber);font-family:var(--font-mono);padding:2px 0 4px;margin:0 2px">⏳ Sebelum Dzuhur (${prayerTimes[1]?.time||'11:53'})</div>`:''}
+        <div class="tilawah-bar-wrap"><div class="tilawah-bar-fill" style="width:${duhaPct}%"></div></div>
+        <div class="tilawah-controls">
+          <div class="tilawah-label">${duhaRokaat} rokaat · min. ${duhaMin}</div>
+          <button class="tilawah-btn" onclick="updateRokaat('duha',-2)">−2</button>
+          <div class="tilawah-num">${duhaRokaat}</div>
+          <button class="tilawah-btn" onclick="updateRokaat('duha',2)">+2</button>
+          <button class="tilawah-btn" onclick="updateRokaat('duha',4)" style="font-size:11px;width:36px;font-family:var(--font-mono)">+4</button>
+        </div>
+      </div>`;
+  }
+
+  // ════════════════════════════════════════════════
+  // SECTION 4: SIANG (Dzuhur / Jumat)
+  // ════════════════════════════════════════════════
+  html += sec(todayDow === 5 ? "Siang · Jum'at" : 'Siang · Dzuhur');
+
+  if (todayDow === 5) {
+    // Sholat Jumat (hari Jumat)
+    const aJumat = DEFAULT_AMALAN.find(x => x.id === 'sholat_jumat');
+    if (aJumat && enabled['sholat_jumat'] !== false) html += checkItem(aJumat);
+    // Kahfi (hari Jumat)
+    const aKahfi = DEFAULT_AMALAN.find(x => x.id === 'kahfi');
+    if (aKahfi && enabled['kahfi'] !== false) html += checkItem(aKahfi);
+  } else {
+    // Sholat Dzuhur group
+    html += renderSholatGroup(SHOLAT_GROUPS.find(g=>g.key==='dzuhur'), todayChecked, todayDow, commCounts);
+  }
+
+  // ════════════════════════════════════════════════
+  // SECTION 5: SORE (Ashar)
+  // ════════════════════════════════════════════════
+  html += sec('Sore · Ashar');
+
+  // Sholat Ashar group
+  html += renderSholatGroup(SHOLAT_GROUPS.find(g=>g.key==='ashar'), todayChecked, todayDow, commCounts);
+
+  // Dzikir Sore
+  const aDzSore = DEFAULT_AMALAN.find(x => x.id === 'dzikir_sore');
+  if (aDzSore && enabled['dzikir_sore'] !== false) {
+    html += checkItem(aDzSore);
+  }
+
+  // ════════════════════════════════════════════════
+  // SECTION 6: RINGKASAN SHOLAT KUMULATIF
+  // ════════════════════════════════════════════════
+  html += sec('Ringkasan Sholat Hari Ini');
+  html += renderSholatCumulCard(todayChecked, todayDow);
 
   document.getElementById('checklistContainer').innerHTML = html;
   updateProgress();
 }
 
 function updateQLSub(type, delta) {
-  const today = getToday();
+  const today = getMutabaahDay();
   if (!state.ql_sub) state.ql_sub = {};
   if (!state.ql_sub[today]) state.ql_sub[today] = { tahajud: 0, witir: 0 };
   state.ql_sub[today][type] = Math.max(0, state.ql_sub[today][type] + delta);
 
-  // Sinkronisasi ke rokaat total
   const total = state.ql_sub[today].tahajud + state.ql_sub[today].witir;
   if (!state.rokaat) state.rokaat = {};
   if (!state.rokaat[today]) state.rokaat[today] = {};
   state.rokaat[today].ql = total;
 
-  // QL dianggap done jika: witir >= 1 DAN total >= 5
   const witirOk = state.ql_sub[today].witir >= 1;
   const done = witirOk && total >= 5;
   if (!state.checked[today]) state.checked[today] = {};
@@ -2377,7 +2673,7 @@ function updateQLSub(type, delta) {
 }
 
 function updateRokaat(id, delta) {
-  const today = getToday();
+  const today = getMutabaahDay();
   if (!state.rokaat) state.rokaat = {};
   if (!state.rokaat[today]) state.rokaat[today] = {};
   const current = state.rokaat[today][id] || 0;
@@ -2400,7 +2696,7 @@ function updateRokaat(id, delta) {
 }
 
 function updateOlahraga(delta) {
-  const today = getToday();
+  const today = getMutabaahDay();
   if (!state.olahraga) state.olahraga = {};
   if (!state.olahraga[today]) state.olahraga[today] = 0;
   state.olahraga[today] = Math.max(0, state.olahraga[today] + delta);
@@ -2423,7 +2719,7 @@ function updateOlahraga(delta) {
 }
 
 function updateDzikir(id, delta) {
-  const today = getToday();
+  const today = getMutabaahDay();
   if (!state.dzikir) state.dzikir = {};
   if (!state.dzikir[today]) state.dzikir[today] = {};
   if (!state.dzikir[today][id]) state.dzikir[today][id] = 0;
@@ -2447,7 +2743,7 @@ function updateDzikir(id, delta) {
 }
 
 function updateTilawah(delta) {
-  const today = getToday();
+  const today = getMutabaahDay();
   if (!state.tilawah) state.tilawah = {};
   if (!state.tilawah[today]) state.tilawah[today] = 0;
   state.tilawah[today] = Math.max(0, state.tilawah[today] + delta);
@@ -2469,7 +2765,7 @@ function updateTilawah(delta) {
 }
 
 function toggleCheck(id) {
-  const today = getToday();
+  const today = getMutabaahDay();
   if (!state.checked[today]) state.checked[today] = {};
   if (state.checked[today][id]) {
     delete state.checked[today][id];
@@ -2479,7 +2775,13 @@ function toggleCheck(id) {
   } else {
     state.checked[today][id] = Date.now();
     const amalan = DEFAULT_AMALAN.find(a => a.id === id);
-    showToast(`✅ ${amalan.icon} ${amalan.name}`);
+    // Cek juga di sholat sub-rows
+    let toastName = amalan ? `${amalan.icon} ${amalan.name}` : id;
+    if (!amalan) {
+      const sg = SHOLAT_GROUPS.flatMap(g => g.subs).find(s => s.id === id);
+      if (sg) toastName = `${sg.icon} ${sg.label}`;
+    }
+    showToast(`✅ ${toastName}`);
     saveState();
     renderChecklist();
     syncCheckinToSupabase(id, true, state.checked[today][id]);
@@ -2493,8 +2795,11 @@ function formatTime(d) {
 function updateProgress() {
   const todayChecked = getTodayChecked();
   const enabled = state.settings.amalanEnabled;
-  const total = DEFAULT_AMALAN.filter(a => enabled[a.id] !== false).length;
-  const done = DEFAULT_AMALAN.filter(a => enabled[a.id] !== false && !!todayChecked[a.id]).length;
+  // Hitung semua amalan termasuk sholat sub-items
+  const allIds = [...DEFAULT_AMALAN.map(a => a.id), ...SHOLAT_GROUPS.flatMap(g => g.subs.map(s => s.id))];
+  const uniqueIds = [...new Set(allIds)];
+  const total = uniqueIds.filter(id => enabled[id] !== false).length;
+  const done = uniqueIds.filter(id => enabled[id] !== false && !!todayChecked[id]).length;
   const pct = total > 0 ? Math.round(done / total * 100) : 0;
 
   document.getElementById('progressPct').textContent = pct + '%';
@@ -2926,14 +3231,20 @@ function updateDate() {
     `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
   document.getElementById('dayLabel').textContent = days[now.getDay()];
 
-  // Approximate Hijri (simple offset method)
-  const hijriOffset = 18933; // days between 1970-01-01 and 1390-01-01
-  const totalDays = Math.floor(now.getTime() / 86400000) + hijriOffset;
-  const hijriYear = Math.floor(totalDays / 354.367);
-  const hijriMonthNames = ['Muharram','Safar','Rabi\'ul Awal','Rabi\'ul Akhir','Jumadal Ula','Jumadal Akhirah','Rajab','Sya\'ban','Ramadan','Syawal','Dzulqa\'dah','Dzulhijjah'];
-  const rem = totalDays % 354;
-  const hijriMonth = Math.min(Math.floor(rem / 29.5), 11);
-  document.getElementById('hijriDate').textContent = `${hijriMonthNames[hijriMonth]} ${1445 + Math.floor(hijriYear / 30)}H`;
+  // Hijri date — gunakan "mutabaah day" (setelah maghrib = hari berikutnya)
+  const mDay = getMutabaahDay();
+  const mDate = new Date(mDay + 'T00:00:00');
+  const hijriLabel = getHijriLabel(mDate);
+  const afterMaghrib = prayerTimes.length > 0 && (() => {
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const mg = prayerTimes.find(p => p.name === 'Maghrib');
+    return mg && nowMin >= mg.minutes;
+  })();
+  document.getElementById('hijriDate').textContent =
+    hijriLabel + (afterMaghrib ? ' 🌙' : '');
+  // Sync modal hijri label
+  const rm = document.getElementById('resetModalHijri');
+  if (rm) rm.textContent = hijriLabel;
 }
 
 // =====================
@@ -2957,5 +3268,16 @@ setInterval(() => { if (currentUser) renderPrayerStrip(); }, 60000);
 
 updateClock();
 </script>
+
+<!-- RESET MODAL -->
+<div id="resetModal" class="reset-modal-overlay" style="display:none" onclick="closeResetModal()">
+  <div class="reset-modal-box" onclick="event.stopPropagation()">
+    <div class="reset-modal-icon">🌙</div>
+    <div class="reset-modal-title">Hari Baru Dimulai</div>
+    <div class="reset-modal-hijri" id="resetModalHijri">— 1447H</div>
+    <div class="reset-modal-sub">Mulai amalan malam ini — Maghrib & Isya sudah bisa diisi!</div>
+    <button class="reset-modal-btn" onclick="closeResetModal()">Mulai Amalan Malam →</button>
+  </div>
+</div>
 </body>
 </html>
