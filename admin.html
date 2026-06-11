@@ -908,18 +908,34 @@ async function loadTargetsFromDB(){
   }catch(e){console.warn('loadTargetsFromDB:',e.message);}
 }
 
+const FARDU_IDS=['subuh','dzuhur','ashar','maghrib','isya'];
+
+// Amalan yang ditampilkan di target grid (fardu 5 waktu digabung jadi 1 entri)
+const TARGET_GRID_ITEMS=[
+  {id:'_fardu',name:'Sholat Fardu',desc:'5 waktu sekaligus',icon:'🕌'},
+  ...AMALAN.filter(a=>!FARDU_IDS.includes(a.id)).map(a=>({id:a.id,name:a.name,desc:a.cat})),
+];
+
+function isFarduOn(){return FARDU_IDS.every(id=>targets.has(id));}
+
 function renderTargetGrid(){
-  document.getElementById('targetGrid').innerHTML=AMALAN.map(a=>{
-    const on=targets.has(a.id);
+  document.getElementById('targetGrid').innerHTML=TARGET_GRID_ITEMS.map(a=>{
+    const on = a.id==='_fardu' ? isFarduOn() : targets.has(a.id);
     return `<div class="target-item ${on?'on':''}" id="ti-${a.id}">
-      <div><div style="font-size:13px">${a.name}</div><div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${a.cat}</div></div>
+      <div><div style="font-size:13px">${a.icon||''} ${a.name}</div><div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${a.desc}</div></div>
       <div class="toggle ${on?'on':''}" id="tg-${a.id}" onclick="togTarget('${a.id}')"></div>
     </div>`;
   }).join('');
 }
+
 function togTarget(id){
-  if(targets.has(id)){targets.delete(id);document.getElementById('tg-'+id).classList.remove('on');document.getElementById('ti-'+id).classList.remove('on');}
-  else{targets.add(id);document.getElementById('tg-'+id).classList.add('on');document.getElementById('ti-'+id).classList.add('on');}
+  const ids = id==='_fardu' ? FARDU_IDS : [id];
+  const isOn = id==='_fardu' ? isFarduOn() : targets.has(id);
+  ids.forEach(i=>{ if(isOn) targets.delete(i); else targets.add(i); });
+  const el=document.getElementById('tg-'+id);
+  const ti=document.getElementById('ti-'+id);
+  if(el) el.classList.toggle('on',!isOn);
+  if(ti) ti.classList.toggle('on',!isOn);
 }
 async function saveTargets(){
   // read sholat cumul values from inputs
