@@ -10,4 +10,4 @@ node_modules/
 .env.local
 
 # Deploy artifacts
-index.html
+# index.html — dikelola dari mutabaah.html, tidak di-ignore
