@@ -1066,8 +1066,8 @@
 
   <!-- MAGHRIB RESET BANNER -->
   <div id="maghribBanner" class="maghrib-banner" style="display:none">
-    <span>⏰</span>
-    <span>Checklist berganti dalam <strong id="maghribCountdown">--</strong></span>
+    <span>🌙</span>
+    <span>Hari baru (Hijriyah) mulai Maghrib — checklist reset dalam <strong id="maghribCountdown">--</strong></span>
   </div>
 
   <!-- NEXT PRAYER COUNTDOWN -->
@@ -1503,6 +1503,20 @@ async function loadGroupConfigFromSupabase() {
 // KOMUNITAS
 // =====================
 
+// Silent background load — hanya populate _komCounts tanpa render tab komunitas
+async function loadKomunitasCounts() {
+  if (!db) return;
+  try {
+    const today = getToday();
+    const { data } = await db.from('mtb_daily_checkin')
+      .select('amalan_id').eq('tanggal', today).eq('checked', true);
+    const counts = {};
+    (data || []).forEach(r => { counts[r.amalan_id] = (counts[r.amalan_id] || 0) + 1; });
+    window._komCounts = counts;
+    renderChecklist(); // re-render dengan motivasi yang sudah ada datanya
+  } catch(e) {}
+}
+
 async function loadKomunitas() {
   const container = document.getElementById('komunitas-content');
   if (!container) return;
@@ -1662,6 +1676,7 @@ function selectUser(username) {
     syncCountersToSupabase();
     syncIqobToSupabase();
     loadGroupConfigFromSupabase();
+    loadKomunitasCounts(); // load counts for inline social motivation
   });
 
   // Update UI
@@ -1867,7 +1882,7 @@ let state = {
   streak: 0,
   olahraga: {},   // { 'YYYY-MM-DD': menit }
   dzikir: {},     // { 'YYYY-MM-DD': { istighfar: 0, sholawat: 0, tasbih: 0 } }
-  iqob: { hutang: 0, lastCalc: '' }, // sistem iqob (hutang pushup)
+  iqob: { hutang: 0, asal: 0, lastCalc: '' }, // hutang=sisa, asal=total accumulated belum lunas
 };
 
 function getToday() {
@@ -1956,13 +1971,16 @@ function calculateIqob() {
     if (AMALAN_HARI[id] && !AMALAN_HARI[id].includes(dow)) return;
     if (!hist[id]) missed++;
   });
-  state.iqob.hutang = (state.iqob.hutang || 0) + (missed * 10); // 1 amalan = 10 pushup
+  const newDebt = missed * 10;
+  state.iqob.hutang = (state.iqob.hutang || 0) + newDebt;
+  state.iqob.asal  = (state.iqob.asal  || 0) + newDebt;
   state.iqob.lastCalc = today;
   saveState();
 }
 
 function settleIqob(amount) {
   state.iqob.hutang = Math.max(0, (state.iqob.hutang||0) - amount);
+  if (state.iqob.hutang === 0) state.iqob.asal = 0; // reset cycle saat lunas
   saveState();
   renderChecklist();
   showToast(`💪 ${amount} pushup selesai!`);
@@ -2137,19 +2155,23 @@ function updateNextPrayer() {
   const badge = document.getElementById('reminderBadge');
   badge.textContent = `-${remMin} menit`;
 
-  // Maghrib banner — checklist reset countdown
+  // Maghrib banner — checklist reset countdown (mm:ss precision)
   const maghribPrayer = prayerTimes.find(p => p.name === 'Maghrib');
   const banner = document.getElementById('maghribBanner');
   const bannerTxt = document.getElementById('maghribCountdown');
   if (banner && maghribPrayer) {
-    const diffMaghrib = maghribPrayer.minutes - nowMin;
-    if (diffMaghrib > 0 && diffMaghrib <= 60) {
-      const hh = Math.floor(diffMaghrib / 60);
-      const mm = diffMaghrib % 60;
-      const txt = hh > 0 ? `${hh}j ${String(mm).padStart(2,'0')}m` : `${mm} menit`;
+    const maghribSec = maghribPrayer.minutes * 60;
+    const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    const diffSec = maghribSec - nowSec;
+    if (diffSec > 0 && diffSec <= 3600) {
+      const mm = Math.floor(diffSec / 60);
+      const ss = diffSec % 60;
+      const txt = mm >= 60
+        ? `${Math.floor(mm/60)}j ${String(mm%60).padStart(2,'0')}m`
+        : `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
       if (bannerTxt) bannerTxt.textContent = txt;
       banner.style.display = 'flex';
-      banner.classList.toggle('urgent', diffMaghrib <= 15);
+      banner.classList.toggle('urgent', diffSec <= 900); // 15 menit
     } else {
       banner.style.display = 'none';
     }
@@ -2218,7 +2240,13 @@ function renderSholatGroup(groupDef, todayChecked, todayDow, commCounts) {
     const checkTime = todayChecked[s.id] ? formatTime(new Date(todayChecked[s.id])) : '';
     const n = commCounts[s.id] || 0;
     const TOTAL = 11;
-    let socialTxt = n === 0 ? '✨ Pertama!' : n < 3 ? `🌟 ${n} ikhwah` : `👥 ${n}/${TOTAL}`;
+    let socialTxt;
+    if (n === 0)           socialTxt = '✨ Jadilah yang pertama!';
+    else if (n === 1)      socialTxt = '🌟 Jadilah orang ke-2!';
+    else if (n < 4)        socialTxt = `💪 ${n} ikhwah sudah`;
+    else if (n < 7)        socialTxt = `🔥 ${n}/${TOTAL} ikhwah`;
+    else if (n < TOTAL)    socialTxt = `🚀 ${n}/${TOTAL} — ayo!`;
+    else                   socialTxt = `✅ Semua selesai!`;
     return `
       <div class="sholat-sub-row ${isChecked ? 'checked' : ''} ${s.isMain ? 'main-row' : ''}" onclick="toggleCheck('${s.id}')">
         <div class="sbox">
@@ -2369,17 +2397,22 @@ function renderChecklist() {
 
   // ── IQOB CARD ──
   if ((state.iqob?.hutang || 0) > 0) {
+    const iqobHutang = state.iqob.hutang;
+    const iqobAsal  = state.iqob.asal || iqobHutang;
+    const iqobSelesai = iqobAsal - iqobHutang;
+    const iqobPct = Math.round(iqobSelesai / iqobAsal * 100);
     html += `
       <div class="tilawah-card" style="border-left:3px solid var(--red);margin-bottom:4px">
         <div class="tilawah-header">
           <div style="width:28px;height:28px;background:rgba(248,113,113,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px">💪</div>
-          <div class="tilawah-title" style="color:var(--red)">Hutang Iqob</div>
-          <div class="tilawah-pct" style="color:var(--red)">${state.iqob.hutang} pushup</div>
+          <div class="tilawah-title" style="color:var(--red)">Iqob — Bayar Pushup</div>
+          <div class="tilawah-pct" style="color:var(--red)">${iqobPct}%</div>
         </div>
-        <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);margin:4px 0 10px">Dari amalan target kemarin yang terlewat. 1 amalan = 10 pushup.</div>
-        <div style="display:flex;gap:8px">
-          <button onclick="settleIqob(10)" style="flex:1;background:rgba(248,113,113,0.1);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:7px;font-size:12px;font-family:var(--font-mono);cursor:pointer">✓ 10 pushup</button>
-          <button onclick="settleIqob(state.iqob.hutang)" style="flex:1;background:rgba(248,113,113,0.15);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:7px;font-size:12px;font-family:var(--font-mono);cursor:pointer">✓ Lunas semua</button>
+        <div class="tilawah-bar-wrap"><div class="tilawah-bar-fill" style="width:${iqobPct}%;background:var(--red)"></div></div>
+        <div class="tilawah-controls" style="margin-top:6px">
+          <div class="tilawah-label" style="color:var(--text-dim)">${iqobSelesai}/${iqobAsal} pushup selesai · sisa ${iqobHutang}</div>
+          <button onclick="settleIqob(10)" style="background:rgba(248,113,113,0.1);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:5px 10px;font-size:11px;font-family:var(--font-mono);cursor:pointer;white-space:nowrap">+10</button>
+          <button onclick="settleIqob(${iqobHutang})" style="background:rgba(248,113,113,0.15);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:5px 10px;font-size:11px;font-family:var(--font-mono);cursor:pointer;white-space:nowrap">Lunas ✓</button>
         </div>
       </div>`;
   }
@@ -2872,10 +2905,23 @@ function renderReport() {
   }
   document.getElementById('weeklyGrid').innerHTML = weekHtml;
 
-  // Per-amalan rows
+  // Per-amalan rows — target grup dulu, lalu non-target
   const enabled = state.settings.amalanEnabled;
   let rowsHtml = '';
-  DEFAULT_AMALAN.filter(a => enabled[a.id] !== false).forEach(a => {
+  const activeAmalan = DEFAULT_AMALAN.filter(a => enabled[a.id] !== false);
+  const targetAmalan = activeAmalan.filter(a => groupTargets.has(a.id));
+  const otherAmalan  = activeAmalan.filter(a => !groupTargets.has(a.id));
+  const orderedAmalan = [...targetAmalan, ...otherAmalan];
+
+  if (targetAmalan.length > 0) {
+    rowsHtml += `<div style="font-size:10px;color:var(--amber);font-family:var(--font-mono);padding:6px 0 4px;letter-spacing:.05em">★ TARGET GRUP</div>`;
+  }
+  let switchedToOther = false;
+  orderedAmalan.forEach(a => {
+    if (!groupTargets.has(a.id) && !switchedToOther) {
+      switchedToOther = true;
+      rowsHtml += `<div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);padding:8px 0 4px;letter-spacing:.05em;border-top:1px solid var(--border);margin-top:4px">AMALAN LAIN</div>`;
+    }
     let doneCount = 0;
     for (let i = 0; i <= 6; i++) {
       const d = new Date(today);
@@ -2885,9 +2931,10 @@ function renderReport() {
       if (hist[a.id]) doneCount++;
     }
     const pct = Math.round(doneCount / 7 * 100);
+    const isTarget = groupTargets.has(a.id);
     rowsHtml += `
-      <div class="report-row">
-        <div class="report-row-name"><div class="report-row-dot ${pct >= 70 ? 'filled' : ''}"></div>${a.icon} ${a.name}</div>
+      <div class="report-row" style="${isTarget ? 'border-left:2px solid var(--amber);padding-left:8px;margin-left:-2px' : ''}">
+        <div class="report-row-name"><div class="report-row-dot ${pct >= 70 ? 'filled' : ''}"></div>${a.icon} ${a.name}${isTarget ? ' <span style="color:var(--amber);font-size:10px">★</span>' : ''}</div>
         <div class="report-row-stat"><span class="${pct >= 70 ? 'good' : pct < 40 ? 'bad' : ''}">${doneCount}/7</span></div>
       </div>`;
   });

@@ -442,14 +442,15 @@ function initRole(){
       <div class="tab" id="tab-target" onclick="switchTab('target')">🎯 Target Grup</div>`;
     showPanel('progres');
     buildRangeBar('rangeBarProgres', loadProgres);
-    loadProgres();
+    // Sync targets from DB first, then load progres
+    loadTargetsFromDB().then(()=>loadProgres()).catch(()=>loadProgres());
   } else {
     tb.innerHTML=`
       <div class="tab active" id="tab-detail" onclick="switchTab('detail')">📋 Detail Amalan</div>
       <div class="tab" id="tab-grafik" onclick="switchTab('grafik')">📈 Grafik Riwayat</div>`;
     showPanel('detail');
     buildRangeBar('rangeBarDetail', loadDetail);
-    loadDetail();
+    loadTargetsFromDB().then(()=>loadDetail()).catch(()=>loadDetail());
   }
 }
 
@@ -554,8 +555,8 @@ async function loadProgres(){
       }
 
       // Iqob: for each day in range, count missed target amalan
-      // 1 missed target amalan = 1 pushup iqob point
       let totalIqob=0;
+      const missedCounts={}; // amalan_id → count of days missed
       dates.forEach(d=>{
         const dow=new Date(d).getDay();
         const done=userData[d]||new Set();
@@ -564,10 +565,20 @@ async function loadProgres(){
           if(id==='kahfi')return dow===5;
           return true;
         });
-        totalIqob+=rel.filter(id=>!done.has(id)).length;
+        rel.filter(id=>!done.has(id)).forEach(id=>{
+          totalIqob++;
+          missedCounts[id]=(missedCounts[id]||0)+1;
+        });
       });
+      // Sort missed amalan by frequency, take top ones
+      const missedAmalan=Object.entries(missedCounts)
+        .sort((a,b)=>b[1]-a[1])
+        .map(([id,cnt])=>{
+          const a=AMALAN.find(x=>x.id===id);
+          return dates.length===1 ? (a?.name||id) : `${a?.name||id}${cnt>1?' ('+cnt+'x)':''}`;
+        });
 
-      return {nama,uid,avgPct,activeDays,totalDays,subLabel,pctColor,totalIqob,totalTargetOps,totalTargetDone};
+      return {nama,uid,avgPct,activeDays,totalDays,subLabel,pctColor,totalIqob,totalTargetOps,totalTargetDone,missedAmalan};
     });
 
     const activeCount=cards.filter(c=>c.activeDays>0).length;
@@ -651,7 +662,9 @@ function downloadIqobReport(){
     byIqob.forEach((c,i)=>{
       const angka=['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
       txt+=`${angka[i]||`${i+1}.`} ${c.nama}\n`;
-      // Cari amalan yang terlewat (totalTargetOps - totalTargetDone per hari tidak bisa detail dari sini)
+      if(c.missedAmalan && c.missedAmalan.length>0){
+        txt+=`Bolong: ${c.missedAmalan.join(', ')}\n`;
+      }
       txt+=`💪 Iqob: ${c.totalIqob} push up\n`;
       txt+=`${getMotivIqob(c.totalIqob, c.nama)}\n\n`;
     });
