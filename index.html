@@ -2993,12 +2993,40 @@ function exportReport() {
 // SETTINGS RENDER
 // =====================
 
+// Grup sholat untuk setelan (sama dengan admin target grid)
+const SETTINGS_SHOLAT_GROUPS = [
+  { id:'_fardu',    icon:'🕌', name:'Sholat Fardu',  desc:'5 waktu sekaligus',        ids:['subuh','dzuhur','ashar','maghrib','isya'] },
+  { id:'_earlybird',icon:'🌄', name:'Early Bird',     desc:'5 waktu sholat',           ids:['earlybird_subuh','earlybird_dzuhur','earlybird_ashar','earlybird_maghrib','earlybird_isya'] },
+  { id:'_qobliyah', icon:'🙏', name:'Qobliyah',       desc:'Subuh · Dzuhur · Maghrib', ids:['qobliyah_subuh','qobliyah_dzuhur','qobliyah_maghrib'] },
+  { id:'_badiyah',  icon:'🙏', name:"Ba'diyah",       desc:'Dzuhur · Maghrib · Isya',  ids:['badiyah_dzuhur','badiyah_maghrib','badiyah_isya'] },
+];
+const SETTINGS_SHOLAT_IDS = new Set(SETTINGS_SHOLAT_GROUPS.flatMap(g=>g.ids));
+
 function renderSettings() {
   const enabled = state.settings.amalanEnabled;
   let html = '';
-  DEFAULT_AMALAN.forEach(a => {
+
+  // Render sholat grup sebagai 1 toggle
+  SETTINGS_SHOLAT_GROUPS.forEach(g => {
+    const isOn = g.ids.some(id => enabled[id] !== false);
+    const isLocked = g.ids.some(id => groupTargets.has(id));
+    html += `
+      <div class="settings-item">
+        <div class="settings-item-left">
+          <div class="settings-item-name">${g.icon} ${g.name}${isLocked ? ' <span style="color:var(--amber);font-size:10px">★</span>' : ''}</div>
+          <div class="settings-item-desc">${g.desc}</div>
+        </div>
+        ${isLocked
+          ? `<div style="font-size:10px;color:var(--amber);font-family:var(--font-mono);padding:4px 8px;border:1px solid rgba(251,191,36,0.3);border-radius:6px">★ Grup</div>`
+          : `<div class="toggle ${isOn ? 'on' : ''}" id="atog-${g.id}" onclick="toggleAmalanGroup('${g.id}')"></div>`
+        }
+      </div>`;
+  });
+
+  // Render amalan non-sholat seperti biasa
+  DEFAULT_AMALAN.filter(a => !SETTINGS_SHOLAT_IDS.has(a.id)).forEach(a => {
     const isOn = enabled[a.id] !== false;
-    const isLocked = groupTargets.has(a.id); // target grup tidak bisa di-off
+    const isLocked = groupTargets.has(a.id);
     html += `
       <div class="settings-item">
         <div class="settings-item-left">
@@ -3009,8 +3037,7 @@ function renderSettings() {
           ? `<div style="font-size:10px;color:var(--amber);font-family:var(--font-mono);padding:4px 8px;border:1px solid rgba(251,191,36,0.3);border-radius:6px">★ Grup</div>`
           : `<div class="toggle ${isOn ? 'on' : ''}" id="atog-${a.id}" onclick="toggleAmalan('${a.id}')"></div>`
         }
-      </div>
-    `;
+      </div>`;
   });
   document.getElementById('amalanToggles').innerHTML = html;
   document.getElementById('reminderMin').value = state.settings.reminderMin;
@@ -3030,6 +3057,18 @@ function renderSettings() {
 function toggleAmalan(id) {
   if (groupTargets.has(id)) { showToast('★ Amalan target grup tidak bisa dinonaktifkan'); return; }
   state.settings.amalanEnabled[id] = !state.settings.amalanEnabled[id];
+  saveState();
+  renderSettings();
+  renderChecklist();
+}
+
+function toggleAmalanGroup(groupId) {
+  const grp = SETTINGS_SHOLAT_GROUPS.find(g => g.id === groupId);
+  if (!grp) return;
+  const locked = grp.ids.some(id => groupTargets.has(id));
+  if (locked) { showToast('★ Amalan target grup tidak bisa dinonaktifkan'); return; }
+  const isOn = grp.ids.some(id => state.settings.amalanEnabled[id] !== false);
+  grp.ids.forEach(id => { state.settings.amalanEnabled[id] = !isOn; });
   saveState();
   renderSettings();
   renderChecklist();

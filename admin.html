@@ -181,7 +181,22 @@
       <div class="stats-row" id="statsProgres"></div>
       <div class="member-grid" id="memberGrid"></div>
       <div style="margin-top:12px;text-align:right">
-        <button class="btn-dl" onclick="downloadIqobReport()">⬇ Laporan Iqob (TXT)</button>
+        <button class="btn-dl" onclick="previewIqobReport()">📋 Preview Laporan Iqob</button>
+      </div>
+    </div>
+
+    <!-- MODAL: PREVIEW LAPORAN IQOB -->
+    <div id="iqobModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeIqobModal()">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:520px;width:100%;max-height:85vh;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:15px;font-weight:700;color:var(--green)">📋 Preview Laporan Iqob</div>
+          <button onclick="closeIqobModal()" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:4px">✕</button>
+        </div>
+        <pre id="iqobPreviewText" style="font-family:var(--font-mono);font-size:11px;line-height:1.6;white-space:pre-wrap;color:var(--text);background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;overflow-y:auto;flex:1;min-height:0;max-height:60vh"></pre>
+        <div style="display:flex;gap:8px">
+          <button onclick="copyIqobReport()" id="copyBtn" style="flex:1;background:var(--green);color:#0b140b;border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">📋 Copy Teks</button>
+          <button onclick="closeIqobModal()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);border-radius:10px;padding:10px 16px;font-size:13px;cursor:pointer">Tutup</button>
+        </div>
       </div>
     </div>
 
@@ -627,59 +642,56 @@ function getMotivIqob(iqob, nama) {
   return `🏆 Yang terberat iqob-nya, yang terbesar potensinya!`;
 }
 
-function downloadIqobReport(){
-  if(!_lastProgresData){alert('Muat data dulu');return;}
+function buildIqobReportText(){
+  if(!_lastProgresData)return null;
   const {cards,start,end}=_lastProgresData;
   const rangeLabel=getLabelRange(start,end);
   const now=new Date().toLocaleString('id-ID');
-  const totalTarget=cards[0]?.totalTargetOps||0;
-
-  // Sort by pct desc untuk rekap
   const byPct=[...cards].sort((a,b)=>b.avgPct-a.avgPct);
-  // Sort by iqob desc untuk seksi iqob
   const byIqob=[...cards].filter(c=>c.totalIqob>0).sort((a,b)=>b.totalIqob-a.totalIqob);
+  const angka=['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
 
   let txt=`🕌 MUTABAAH FIDIN JENGGOT MERAH\n`;
   txt+=`📅 Periode: ${rangeLabel}\n`;
   txt+=`🕐 Digenerate: ${now}\n`;
   txt+=`${'─'.repeat(45)}\n\n`;
-
-  // Rekap per peserta
   txt+=`👥 REKAP PER PESERTA\n`;
   byPct.forEach(c=>{
-    const doneFrac=`${c.totalTargetDone}/${c.totalTargetOps}`;
-    const icon=c.avgPct>=70?'✅':'⚠️';
-    txt+=`${icon} ${c.nama} — ${doneFrac} (${c.avgPct}%)\n`;
+    txt+=`${c.avgPct>=70?'✅':'⚠️'} ${c.nama} — ${c.totalTargetDone}/${c.totalTargetOps} (${c.avgPct}%)\n`;
   });
-
   txt+=`\n${'─'.repeat(45)}\n\n`;
-
   if(byIqob.length===0){
-    txt+=`🎉 TIDAK ADA IQOB PEKAN INI!\n`;
-    txt+=`Semua ikhwah memenuhi target. MasyaAllah!\n`;
+    txt+=`🎉 TIDAK ADA IQOB PEKAN INI!\nSemua ikhwah memenuhi target. MasyaAllah!\n`;
   } else {
     txt+=`🔴 IQOB PUSH UP\n\n`;
     byIqob.forEach((c,i)=>{
-      const angka=['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
       txt+=`${angka[i]||`${i+1}.`} ${c.nama}\n`;
-      if(c.missedAmalan && c.missedAmalan.length>0){
-        txt+=`Bolong: ${c.missedAmalan.join(', ')}\n`;
-      }
+      if(c.missedAmalan?.length) txt+=`Bolong: ${c.missedAmalan.join(', ')}\n`;
       txt+=`💪 Iqob: ${c.totalIqob} push up\n`;
-      txt+=`${getMotivIqob(c.totalIqob, c.nama)}\n\n`;
+      txt+=`${getMotivIqob(c.totalIqob,c.nama)}\n\n`;
     });
   }
-
   txt+=`${'─'.repeat(45)}\n`;
-  txt+=`📝 CATATAN:\n`;
-  txt+=`• 1 amalan target terlewat (per hari) = 10 push up iqob\n`;
-  txt+=`• Target grup: ${[...targets].length} amalan\n`;
-  txt+=`• Sampaikan dengan penuh mahabbah 💚\n`;
+  txt+=`📝 CATATAN:\n• 1 amalan target terlewat = 10 push up iqob\n`;
+  txt+=`• Target grup: ${[...targets].length} amalan\n• Sampaikan dengan penuh mahabbah 💚`;
+  return txt;
+}
 
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain;charset=utf-8'}));
-  a.download=`iqob-mutabaah-${start}${start!==end?'_sd_'+end:''}.txt`;
-  a.click();
+function previewIqobReport(){
+  if(!_lastProgresData){alert('Muat data dulu (buka tab Progres Anggota)');return;}
+  const txt=buildIqobReportText();
+  document.getElementById('iqobPreviewText').textContent=txt;
+  const m=document.getElementById('iqobModal');
+  m.style.display='flex';
+}
+function closeIqobModal(){document.getElementById('iqobModal').style.display='none';}
+function copyIqobReport(){
+  const txt=document.getElementById('iqobPreviewText').textContent;
+  navigator.clipboard.writeText(txt).then(()=>{
+    const btn=document.getElementById('copyBtn');
+    btn.textContent='✅ Tersalin!';
+    setTimeout(()=>{btn.textContent='📋 Copy Teks';},2000);
+  });
 }
 
 // ── PEMBINA: DETAIL AMALAN ────────────────────
@@ -791,6 +803,8 @@ function selectMember(nama){
     el.classList.toggle('active', el.textContent.trim()===nama);
   });
   loadGrafikMember(nama);
+  // scroll ke grafik content setelah render
+  setTimeout(()=>document.getElementById('grafikContent')?.scrollIntoView({behavior:'smooth',block:'start'}),200);
 }
 
 async function loadGrafikMember(nama){
@@ -866,13 +880,58 @@ async function loadGrafikMember(nama){
     const activeDays=dailyData.filter(x=>x.done>0).length;
     const amalanLabel=showAllAmalanGrafik?`Semua amalan (${amalanToShow.length})`:`Target grup (${amalanToShow.length})`;
 
+    // ── Radar chart: 6 dimensi ──
+    const RADAR=[
+      {key:'fardu',   label:'Fardu',   icon:'🕌', ids:['subuh','dzuhur','ashar','maghrib','isya']},
+      {key:'sunnah',  label:'Sunnah',  icon:'🙏', ids:['ql','qobliyah_subuh','qobliyah_dzuhur','qobliyah_maghrib','badiyah_dzuhur','badiyah_maghrib','badiyah_isya']},
+      {key:'tilawah', label:'Tilawah', icon:'📖', ids:['1juz']},
+      {key:'dzikir',  label:'Dzikir',  icon:'📿', ids:['dzikir_pagi','dzikir_sore']},
+      {key:'amal',    label:'Amal',    icon:'💚', ids:['infaq','duha','puasa_senin_kamis']},
+      {key:'sehat',   label:'Sehat',   icon:'🏃', ids:['olahraga','earlybird_subuh','earlybird_dzuhur','earlybird_ashar','earlybird_maghrib','earlybird_isya']},
+    ];
+    const AMALAN_HARI_ADMIN={'puasa_senin_kamis':[1,4],'kahfi':[5],'sholat_jumat':[5],'earlybird_dzuhur':[0,1,2,3,4,6],'qobliyah_dzuhur':[0,1,2,3,4,6],'dzuhur':[0,1,2,3,4,6],'badiyah_dzuhur':[0,1,2,3,4,6]};
+    const radarScores=RADAR.map(dim=>{
+      let tot=0,done=0;
+      dates.forEach(d=>{
+        const dow=new Date(d).getDay();
+        dim.ids.forEach(id=>{
+          if(AMALAN_HARI_ADMIN[id]&&!AMALAN_HARI_ADMIN[id].includes(dow))return;
+          tot++;
+          if(byDay[d]?.has(id))done++;
+        });
+      });
+      return tot>0?Math.round(done/tot*100):0;
+    });
+
+    const radarSvg=(()=>{
+      const cx=150,cy=150,r=100,n=6;
+      const ang=i=>(i*2*Math.PI/n)-Math.PI/2;
+      const pt=(i,pct)=>`${cx+r*pct*Math.cos(ang(i))},${cy+r*pct*Math.sin(ang(i))}`;
+      const grid=[.2,.4,.6,.8,1].map(p=>`<polygon points="${RADAR.map((_,i)=>pt(i,p)).join(' ')}" fill="none" stroke="var(--border)" stroke-width="1" opacity="0.6"/>`).join('');
+      const axes=RADAR.map((_,i)=>`<line x1="${cx}" y1="${cy}" x2="${cx+r*Math.cos(ang(i))}" y2="${cy+r*Math.sin(ang(i))}" stroke="var(--border)" stroke-width="1"/>`).join('');
+      const poly=`<polygon points="${radarScores.map((s,i)=>pt(i,s/100)).join(' ')}" fill="rgba(74,222,128,0.18)" stroke="var(--green)" stroke-width="2.5" stroke-linejoin="round"/>`;
+      const dots=radarScores.map((s,i)=>`<circle cx="${cx+r*(s/100)*Math.cos(ang(i))}" cy="${cy+r*(s/100)*Math.sin(ang(i))}" r="4" fill="var(--green)"/>`).join('');
+      const labels=RADAR.map((d,i)=>{
+        const lx=cx+(r+28)*Math.cos(ang(i)), ly=cy+(r+28)*Math.sin(ang(i));
+        const col=radarScores[i]>=70?'var(--green)':radarScores[i]>=40?'var(--amber)':'var(--red)';
+        return `<text x="${lx}" y="${ly-8}" text-anchor="middle" font-size="14">${d.icon}</text>
+          <text x="${lx}" y="${ly+6}" text-anchor="middle" font-size="9" font-family="monospace" fill="var(--text-dim)">${d.label}</text>
+          <text x="${lx}" y="${ly+18}" text-anchor="middle" font-size="10" font-family="monospace" font-weight="700" fill="${col}">${radarScores[i]}%</text>`;
+      }).join('');
+      return `<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:300px;display:block;margin:0 auto">${grid}${axes}${poly}${dots}${labels}</svg>`;
+    })();
+
     gc.innerHTML=`
       <div class="card" style="margin-bottom:16px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
           <div style="font-size:14px;font-weight:600">${nama}</div>
           <div style="font-size:12px;font-family:var(--font-mono);color:var(--text-dim)">${activeDays}/30 hari aktif · avg ${avgPct}%</div>
         </div>
-        <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:8px">Completion target harian · 30 hari terakhir</div>
+        <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:12px">6 Dimensi Amalan · 30 hari terakhir</div>
+        ${radarSvg}
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:8px">TREN HARIAN · 30 HARI TERAKHIR</div>
         <div class="mini-chart" style="height:100px">${barHtml}</div>
       </div>
       <div style="font-size:12px;font-family:var(--font-mono);color:var(--text-muted);margin-bottom:10px">RIWAYAT PER AMALAN · 30 HARI TERAKHIR · ${amalanLabel.toUpperCase()}</div>
@@ -908,34 +967,37 @@ async function loadTargetsFromDB(){
   }catch(e){console.warn('loadTargetsFromDB:',e.message);}
 }
 
-const FARDU_IDS=['subuh','dzuhur','ashar','maghrib','isya'];
+const FARDU_IDS    =['subuh','dzuhur','ashar','maghrib','isya'];
+const EARLYBIRD_IDS=['earlybird_subuh','earlybird_dzuhur','earlybird_ashar','earlybird_maghrib','earlybird_isya'];
+const QOBLIYAH_IDS =['qobliyah_subuh','qobliyah_dzuhur','qobliyah_maghrib'];
+const BADIYAH_IDS  =['badiyah_dzuhur','badiyah_maghrib','badiyah_isya'];
+const SHOLAT_GROUPED_IDS=new Set([...FARDU_IDS,...EARLYBIRD_IDS,...QOBLIYAH_IDS,...BADIYAH_IDS]);
 
-// Amalan yang ditampilkan di target grid (fardu 5 waktu digabung jadi 1 entri)
 const TARGET_GRID_ITEMS=[
-  {id:'_fardu',name:'Sholat Fardu',desc:'5 waktu sekaligus',icon:'🕌'},
-  ...AMALAN.filter(a=>!FARDU_IDS.includes(a.id)).map(a=>({id:a.id,name:a.name,desc:a.cat})),
+  {id:'_fardu',    name:'Sholat Fardu', desc:'5 waktu sekaligus',        icon:'🕌', groupIds:FARDU_IDS},
+  {id:'_earlybird',name:'Early Bird',   desc:'5 waktu sholat',           icon:'🌄', groupIds:EARLYBIRD_IDS},
+  {id:'_qobliyah', name:'Qobliyah',     desc:'Subuh · Dzuhur · Maghrib', icon:'🙏', groupIds:QOBLIYAH_IDS},
+  {id:'_badiyah',  name:"Ba'diyah",     desc:'Dzuhur · Maghrib · Isya',  icon:'🙏', groupIds:BADIYAH_IDS},
+  ...AMALAN.filter(a=>!SHOLAT_GROUPED_IDS.has(a.id)).map(a=>({id:a.id,name:a.name,desc:a.cat,icon:'',groupIds:[a.id]})),
 ];
-
-function isFarduOn(){return FARDU_IDS.every(id=>targets.has(id));}
 
 function renderTargetGrid(){
   document.getElementById('targetGrid').innerHTML=TARGET_GRID_ITEMS.map(a=>{
-    const on = a.id==='_fardu' ? isFarduOn() : targets.has(a.id);
+    const on=a.groupIds.every(id=>targets.has(id));
     return `<div class="target-item ${on?'on':''}" id="ti-${a.id}">
-      <div><div style="font-size:13px">${a.icon||''} ${a.name}</div><div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${a.desc}</div></div>
+      <div><div style="font-size:13px">${a.icon} ${a.name}</div><div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${a.desc}</div></div>
       <div class="toggle ${on?'on':''}" id="tg-${a.id}" onclick="togTarget('${a.id}')"></div>
     </div>`;
   }).join('');
 }
 
 function togTarget(id){
-  const ids = id==='_fardu' ? FARDU_IDS : [id];
-  const isOn = id==='_fardu' ? isFarduOn() : targets.has(id);
-  ids.forEach(i=>{ if(isOn) targets.delete(i); else targets.add(i); });
-  const el=document.getElementById('tg-'+id);
-  const ti=document.getElementById('ti-'+id);
-  if(el) el.classList.toggle('on',!isOn);
-  if(ti) ti.classList.toggle('on',!isOn);
+  const item=TARGET_GRID_ITEMS.find(x=>x.id===id);
+  if(!item)return;
+  const isOn=item.groupIds.every(i=>targets.has(i));
+  item.groupIds.forEach(i=>{ if(isOn)targets.delete(i); else targets.add(i); });
+  document.getElementById('tg-'+id)?.classList.toggle('on',!isOn);
+  document.getElementById('ti-'+id)?.classList.toggle('on',!isOn);
 }
 async function saveTargets(){
   // read sholat cumul values from inputs
