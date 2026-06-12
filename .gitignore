@@ -11,3 +11,6 @@ node_modules/
 
 # Deploy artifacts
 # index.html — dikelola dari mutabaah.html, tidak di-ignore
+
+# Local Netlify folder
+.netlify
