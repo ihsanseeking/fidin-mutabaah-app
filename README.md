@@ -2,8 +2,8 @@
 
 Aplikasi web progresif (PWA) untuk pencatatan amalan harian kelompok kajian FIDIN Jenggot Merah, Sukabumi.
 
-🔗 **Live App**: https://mutabaah-ihsan.netlify.app  
-🔐 **Admin PJ**: https://mutabaah-ihsan.netlify.app/admin.html  
+🔗 **Live App**: https://fidin-mutabaah-app.pages.dev  
+🔐 **Admin PJ**: https://fidin-mutabaah-app.pages.dev/admin.html  
 
 ## Fitur
 - ✅ Checklist 24 amalan harian
@@ -21,7 +21,7 @@ Aplikasi web progresif (PWA) untuk pencatatan amalan harian kelompok kajian FIDI
 ## Tech Stack
 - **Frontend**: Vanilla HTML/CSS/JS (single-file PWA)
 - **Database**: Supabase (PostgreSQL)
-- **Hosting**: Netlify
+- **Hosting**: Cloudflare Pages
 
 ## Struktur File
 ```
